@@ -8,9 +8,9 @@ from trading.models import AgentStatus, Account, UserSettings, Symbol
 
 User = get_user_model()
 
-# Дефолтные символы для новых пользователей
+# Default symbols for new users
 DEFAULT_SYMBOLS = [
-    # Криптовалюты (Bybit формат)
+    # Crypto (Bybit format)
     {"symbol": "BTCUSDT", "name": "Bitcoin"},
     {"symbol": "ETHUSDT", "name": "Ethereum"},
     {"symbol": "BNBUSDT", "name": "Binance Coin"},
@@ -19,7 +19,7 @@ DEFAULT_SYMBOLS = [
     {"symbol": "XRPUSDT", "name": "Ripple"},
     {"symbol": "DOGEUSDT", "name": "Dogecoin"},
     {"symbol": "MATICUSDT", "name": "Polygon"},
-    # Акции (Yahoo Finance формат)
+    # Stocks (Yahoo Finance format)
     {"symbol": "AAPL", "name": "Apple Inc."},
     {"symbol": "MSFT", "name": "Microsoft Corporation"},
     {"symbol": "GOOGL", "name": "Alphabet Inc."},
@@ -33,16 +33,16 @@ DEFAULT_SYMBOLS = [
 
 @receiver(post_save, sender=User)
 def create_default_agent_statuses(sender, instance, created, **kwargs):
-    """Создаем статусы агентов, счет, настройки и дефолтные символы при создании пользователя"""
+    """Create agent statuses, account, settings and default symbols on user creation"""
     if created:
-        # Создаем статусы агентов
+        # Create agent statuses
         for agent_type, _ in AgentStatus.AGENT_TYPES:
             AgentStatus.objects.get_or_create(
                 user=instance,
                 agent_type=agent_type,
                 defaults={"status": "IDLE"},
             )
-        # Создаем счет пользователя с начальным балансом
+        # Create user account with initial balance
         Account.objects.get_or_create(
             user=instance,
             defaults={
@@ -51,7 +51,7 @@ def create_default_agent_statuses(sender, instance, created, **kwargs):
                 "initial_balance": Decimal("10000.00"),
             }
         )
-        # Создаем настройки пользователя с дефолтными значениями
+        # Create user settings with defaults
         UserSettings.objects.get_or_create(
             user=instance,
             defaults={
@@ -72,7 +72,7 @@ def create_default_agent_statuses(sender, instance, created, **kwargs):
                 "max_leverage": Decimal("1.0"),
             }
         )
-        # Создаем дефолтные символы для пользователя
+        # Create default symbols for user
         for symbol_data in DEFAULT_SYMBOLS:
             Symbol.objects.get_or_create(
                 user=instance,

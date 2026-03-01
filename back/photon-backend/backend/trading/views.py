@@ -108,16 +108,12 @@ def _recalculate_account_balances(account: Account, user):
     for pos in open_positions:
         _refresh_position_price(pos)
         if pos.current_price:
-            # Стоимость позиции по entry price
             position_cost = pos.entry_price * pos.quantity
-            # Текущая стоимость позиции
             position_value = pos.current_price * pos.quantity
-            # Used margin = стоимость по entry price
             used_margin += position_cost
-            # Unrealized PnL = текущая стоимость - стоимость входа
             unrealized_pnl += (pos.current_price - pos.entry_price) * pos.quantity
     
-    # Получаем total PnL из закрытых сделок
+    # Get total PnL from closed trades
     from django.db.models import Sum
     closed_pnl = Trade.objects.filter(
         user=user,
@@ -125,12 +121,12 @@ def _recalculate_account_balances(account: Account, user):
         pnl__isnull=False
     ).aggregate(total=Sum("pnl"))["total"] or Decimal("0.00")
     
-    # Balance = начальный баланс + закрытый PnL + нереализованный PnL
+    # Balance = initial + closed PnL + unrealized PnL
     account.balance = account.initial_balance + closed_pnl + unrealized_pnl
     account.used_margin = used_margin
     account.free_cash = account.initial_balance - used_margin + closed_pnl
     
-    # Проверяем что free_cash не отрицательный
+    # Ensure free_cash is not negative
     if account.free_cash < 0:
         account.free_cash = Decimal("0.00")
     
@@ -138,7 +134,7 @@ def _recalculate_account_balances(account: Account, user):
 
 
 class SymbolViewSet(viewsets.ModelViewSet):
-    """ViewSet для управления символами"""
+    """ViewSet for symbol management"""
     permission_classes = [IsAuthenticated]
     serializer_class = SymbolSerializer
 
@@ -146,26 +142,25 @@ class SymbolViewSet(viewsets.ModelViewSet):
         return Symbol.objects.filter(user=self.request.user, is_active=True)
 
     def create(self, request, *args, **kwargs):
-        """Создание символа с валидацией через yfinance/Bybit"""
+        """Create symbol with validation via yfinance/Bybit"""
         symbol_code = request.data.get("symbol", "").upper().strip()
         if not symbol_code:
-            return Response({"detail": "Символ не указан"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Symbol not specified"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Создаем сервис с настройками из settings
+        # Create service with settings
         market_service = get_market_data_service()
 
-        # Проверяем, существует ли символ
         if not market_service.validate_symbol(symbol_code):
             return Response(
-                {"detail": f"Символ {symbol_code} не найден или недоступен"},
+                {"detail": f"Symbol {symbol_code} not found or unavailable"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Получаем название символа
+        # Get symbol name
         data = market_service.get_latest_data(symbol_code)
         symbol_name = data.get("name", symbol_code) if data else symbol_code
 
-        # Создаем или обновляем символ
+        # Create or update symbol
         symbol, created = Symbol.objects.get_or_create(
             user=request.user,
             symbol=symbol_code,
@@ -182,7 +177,7 @@ class SymbolViewSet(viewsets.ModelViewSet):
 
 
 class MarketDataViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet для получения данных рынка"""
+    """ViewSet for market data"""
     permission_classes = [IsAuthenticated]
     serializer_class = MarketDataSerializer
 
@@ -190,17 +185,17 @@ class MarketDataViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         queryset = MarketData.objects.filter(symbol__user=user)
 
-        # Фильтр по символу
+        # Filter by symbol
         symbol_id = self.request.query_params.get("symbol_id")
         if symbol_id:
             queryset = queryset.filter(symbol_id=symbol_id)
 
-        # Фильтр по символу (код)
+        # Filter by symbol code
         symbol_code = self.request.query_params.get("symbol")
         if symbol_code:
             queryset = queryset.filter(symbol__symbol=symbol_code.upper())
 
-        # Фильтр по времени (последние N часов)
+        # Filter by time (last N hours)
         hours = self.request.query_params.get("hours")
         if hours:
             try:
@@ -214,7 +209,7 @@ class MarketDataViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"])
     def latest(self, request):
-        """Получить последние данные для всех символов пользователя"""
+        """Get latest data for all user symbols"""
         try:
             symbols = Symbol.objects.filter(user=request.user, is_active=True)
             result = []
@@ -227,7 +222,7 @@ class MarketDataViewSet(viewsets.ReadOnlyModelViewSet):
                         serializer = MarketDataSerializer(latest_data)
                         result.append(serializer.data)
                     else:
-                        # Если нет данных в БД, получаем напрямую из API
+                        # If no DB data, fetch directly from API
                         market_service = get_market_data_service()
                         data = market_service.get_latest_data(symbol.symbol)
                         if data:
@@ -237,12 +232,12 @@ class MarketDataViewSet(viewsets.ReadOnlyModelViewSet):
                                 result.append(serializer.data)
                             except Exception as create_error:
                                 logger.error(f"Error creating MarketData for {symbol.symbol}: {str(create_error)}", exc_info=True)
-                                errors.append(f"Ошибка создания данных для {symbol.symbol}: {str(create_error)}")
+                                errors.append(f"Error creating data for {symbol.symbol}: {str(create_error)}")
                         else:
-                            errors.append(f"Не удалось получить данные для {symbol.symbol}")
+                            errors.append(f"Failed to get data for {symbol.symbol}")
                 except Exception as e:
                     logger.error(f"Error getting latest data for {symbol.symbol}: {str(e)}", exc_info=True)
-                    errors.append(f"Ошибка для {symbol.symbol}: {str(e)}")
+                    errors.append(f"Error for {symbol.symbol}: {str(e)}")
 
             response_data = {"data": result}
             if errors:
@@ -251,16 +246,16 @@ class MarketDataViewSet(viewsets.ReadOnlyModelViewSet):
         except Exception as e:
             logger.error(f"Error in latest endpoint: {str(e)}", exc_info=True)
             return Response(
-                {"error": f"Внутренняя ошибка сервера: {str(e)}"},
+                {"error": f"Internal server error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     @action(detail=False, methods=["post"])
     def refresh(self, request):
-        """Обновить данные для указанных символов"""
+        """Update data for specified symbols"""
         symbol_ids = request.data.get("symbol_ids", [])
         if not symbol_ids:
-            # Обновляем все активные символы пользователя
+            # Update all active user symbols
             symbols = Symbol.objects.filter(user=request.user, is_active=True)
         else:
             symbols = Symbol.objects.filter(user=request.user, id__in=symbol_ids, is_active=True)
@@ -275,13 +270,13 @@ class MarketDataViewSet(viewsets.ReadOnlyModelViewSet):
                 market_data = MarketData.objects.create(symbol=symbol, **data)
                 updated.append(MarketDataSerializer(market_data).data)
             else:
-                errors.append(f"Не удалось получить данные для {symbol.symbol}")
+                errors.append(f"Failed to get data for {symbol.symbol}")
 
         return Response({"updated": updated, "errors": errors})
 
 
 class TradingDecisionViewSet(viewsets.ModelViewSet):
-    """ViewSet для управления решениями"""
+    """ViewSet for decision management"""
     permission_classes = [IsAuthenticated]
     serializer_class = TradingDecisionSerializer
 
@@ -289,29 +284,29 @@ class TradingDecisionViewSet(viewsets.ModelViewSet):
         from datetime import datetime
         queryset = TradingDecision.objects.filter(user=self.request.user).select_related("symbol", "market_data")
 
-        # Фильтр по символу
+        # Filter by symbol
         symbol_id = self.request.query_params.get("symbol_id")
         if symbol_id:
             queryset = queryset.filter(symbol_id=symbol_id)
 
-        # Фильтр по решению (action)
+        # Filter by decision (action)
         action = self.request.query_params.get("action")
         if action:
             queryset = queryset.filter(decision=action.upper())
         
-        # Старый параметр decision для обратной совместимости
+        # Legacy decision param for backward compatibility
         decision = self.request.query_params.get("decision")
         if decision:
             queryset = queryset.filter(decision=decision.upper())
         
-        # Фильтр по дате (from_date, to_date)
+        # Filter by date (from_date, to_date)
         from_date = self.request.query_params.get("from_date")
         if from_date:
             try:
                 from_datetime = datetime.fromisoformat(from_date.replace('Z', '+00:00'))
                 queryset = queryset.filter(created_at__gte=from_datetime)
             except (ValueError, TypeError):
-                pass  # Игнорируем неправильный формат
+                pass  # Ignore invalid format
         
         to_date = self.request.query_params.get("to_date")
         if to_date:
@@ -319,9 +314,9 @@ class TradingDecisionViewSet(viewsets.ModelViewSet):
                 to_datetime = datetime.fromisoformat(to_date.replace('Z', '+00:00'))
                 queryset = queryset.filter(created_at__lte=to_datetime)
             except (ValueError, TypeError):
-                pass  # Игнорируем неправильный формат
+                pass  # Ignore invalid format
         
-        # Лимит для первоначальной загрузки (по умолчанию 50)
+        # Limit for initial load (default 50)
         limit = self.request.query_params.get("limit")
         offset = self.request.query_params.get("offset", 0)
         
@@ -342,7 +337,7 @@ class TradingDecisionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def statistics(self, request):
-        """Статистика по решениям"""
+        """Decision statistics"""
         decisions = TradingDecision.objects.filter(user=request.user)
 
         total = decisions.count()
@@ -351,7 +346,7 @@ class TradingDecisionViewSet(viewsets.ModelViewSet):
             count = decisions.filter(decision=choice).count()
             by_decision[choice] = {"count": count, "percentage": (count / total * 100) if total > 0 else 0}
 
-        # Последние решения
+        # Latest decisions
         recent = decisions[:10]
 
         return Response({
@@ -362,7 +357,7 @@ class TradingDecisionViewSet(viewsets.ModelViewSet):
 
 
 class AgentStatusViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet для статусов агентов"""
+    """ViewSet for agent statuses"""
     permission_classes = [IsAuthenticated]
     serializer_class = AgentStatusSerializer
 
@@ -371,11 +366,11 @@ class AgentStatusViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class MarketMonitorAgentView(APIView):
-    """Управление Market Monitoring Agent"""
+    """Manage Market Monitoring Agent"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить статус агента"""
+        """Get agent status"""
         status_obj, _ = AgentStatus.objects.get_or_create(
             user=request.user,
             agent_type="MARKET_MONITOR",
@@ -384,8 +379,8 @@ class MarketMonitorAgentView(APIView):
         return Response(AgentStatusSerializer(status_obj).data)
 
     def post(self, request):
-        """Запустить/остановить агента"""
-        action_type = request.data.get("action", "start")  # start или stop
+        """Start/stop agent"""
+        action_type = request.data.get("action", "start")  # start or stop
 
         status_obj, _ = AgentStatus.objects.get_or_create(
             user=request.user,
@@ -394,7 +389,7 @@ class MarketMonitorAgentView(APIView):
         )
 
         if action_type == "start":
-            # Запускаем Celery задачу
+            # Start Celery task
             task = start_market_monitoring.delay(request.user.id)
             status_obj.status = "RUNNING"
             status_obj.metadata = {"task_id": task.id}
@@ -407,7 +402,7 @@ class MarketMonitorAgentView(APIView):
             })
 
         elif action_type == "stop":
-            # Останавливаем задачу
+            # Stop task
             if status_obj.metadata.get("task_id"):
                 stop_market_monitoring(request.user.id)
             status_obj.status = "STOPPED"
@@ -422,11 +417,11 @@ class MarketMonitorAgentView(APIView):
 
 
 class DecisionMakerAgentView(APIView):
-    """Управление Decision-Making Agent"""
+    """Manage Decision-Making Agent"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить статус агента"""
+        """Get agent status"""
         status_obj, _ = AgentStatus.objects.get_or_create(
             user=request.user,
             agent_type="DECISION_MAKER",
@@ -435,7 +430,7 @@ class DecisionMakerAgentView(APIView):
         return Response(AgentStatusSerializer(status_obj).data)
 
     def post(self, request):
-        """Запросить анализ и решение для символа"""
+        """Request analysis and decision for symbol"""
         from decimal import Decimal
         from trading.agents import MarketMonitoringAgent, DecisionMakingAgent
         from trading.agents.integration import MarketAgentIntegration, DecisionAgentIntegration
@@ -450,15 +445,15 @@ class DecisionMakerAgentView(APIView):
             except Symbol.DoesNotExist:
                 return Response({"detail": "Symbol not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            # Получаем настройки пользователя для конфигурации агентов
+            # Get user settings for agent configuration
             user_settings, _ = UserSettings.objects.get_or_create(
                 user=request.user,
                 defaults={"timeframe": "1h", "risk_level": "medium"}
             )
             
-            # Определяем параметры из настроек
+            # Derive params from settings
             timeframe = user_settings.timeframe or "1h"
-            # Маппинг timeframe в period для агента
+            # Map timeframe to period for agent
             period_map = {
                 "5m": "1d",
                 "15m": "3d",
@@ -468,7 +463,7 @@ class DecisionMakerAgentView(APIView):
             }
             period = period_map.get(timeframe, "1mo")
             
-            # Шаг 1: Используем MarketMonitoringAgent для получения данных с индикаторами
+            # Step 1: Use MarketMonitoringAgent to get data with indicators
             try:
                 market_integration = MarketAgentIntegration(request.user)
                 market_agent = MarketMonitoringAgent(
@@ -476,46 +471,46 @@ class DecisionMakerAgentView(APIView):
                     interval=timeframe,
                     period=period,
                     enable_cache=True,
-                    request_delay=5.0,  # Увеличенная задержка для обхода блокировок Yahoo Finance
-                    max_retries=5,  # Больше попыток
-                    backoff_factor=3.0  # Больше времени между попытками
+                    request_delay=5.0,  # Increased delay to bypass Yahoo Finance blocks
+                    max_retries=5,  # More retries
+                    backoff_factor=3.0  # More time between retries
                 )
                 
-                # Получаем обработанные данные с анализом
+                # Get processed data with analysis
                 market_message = market_integration.process_and_save(
                     symbol=symbol,
                     market_agent=market_agent,
                     save_to_db=True
                 )
                 
-                # Получаем последние данные для связи с решением
+                # Get latest data to link with decision
                 latest_data = MarketData.objects.filter(symbol=symbol).order_by("-timestamp").first()
                 
             except Exception as market_error:
                 logger.error(f"Error getting market data with agent: {str(market_error)}", exc_info=True)
                 return Response(
-                    {"detail": f"Ошибка получения данных рынка через MarketMonitoringAgent: {str(market_error)}"},
+                    {"detail": f"Error fetching market data via MarketMonitoringAgent: {str(market_error)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
-            # Шаг 2: Используем DecisionMakingAgent для принятия решения
+            # Step 2: Use DecisionMakingAgent for decision
             try:
                 decision_integration = DecisionAgentIntegration(request.user)
                 
-                # Получаем настройки для агента
+                # Get agent settings
                 risk_tolerance = user_settings.risk_level or "medium"
-                # Снижаем порог уверенности по умолчанию для получения больше решений (для обучения)
+                # Lower default confidence threshold for more decisions (for training)
                 confidence_threshold = float(user_settings.confidence_threshold or 0.50)
                 model_type = user_settings.model_type or "Random Forest"
                 
-                # Маппинг названия модели
+                # Map model name
                 model_type_map = {
                     "Random Forest": "random_forest",
                     "Gradient Boosting": "gradient_boosting",
                 }
                 agent_model_type = model_type_map.get(model_type, "random_forest")
                 
-                # Создаем DecisionMakingAgent с настройками пользователя
+                # Create DecisionMakingAgent with user settings
                 decision_agent = DecisionMakingAgent(
                     model_type=agent_model_type,
                     risk_tolerance=risk_tolerance,
@@ -523,7 +518,7 @@ class DecisionMakerAgentView(APIView):
                     enable_ai=True
                 )
                 
-                # Принимаем решение
+                # Make decision
                 decision = decision_integration.make_decision(
                     symbol=symbol,
                     market_data_obj=latest_data,
@@ -537,23 +532,23 @@ class DecisionMakerAgentView(APIView):
             except Exception as decision_error:
                 logger.error(f"Error in decision-making agent: {str(decision_error)}", exc_info=True)
                 return Response(
-                    {"detail": f"Ошибка принятия решения: {str(decision_error)}"},
+                    {"detail": f"Error making decision: {str(decision_error)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         except Exception as e:
             logger.error(f"Error in decision-maker endpoint: {str(e)}", exc_info=True)
             return Response(
-                {"detail": f"Внутренняя ошибка сервера: {str(e)}"},
+                {"detail": f"Internal server error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
 class ExecutionAgentView(APIView):
-    """Управление Execution Agent"""
+    """Manage Execution Agent"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить статус агента"""
+        """Get agent status"""
         status_obj, _ = AgentStatus.objects.get_or_create(
             user=request.user,
             agent_type="EXECUTION",
@@ -562,7 +557,7 @@ class ExecutionAgentView(APIView):
         return Response(AgentStatusSerializer(status_obj).data)
     
     def post(self, request):
-        """Выполнить решение (сделку)"""
+        """Execute decision (trade)"""
         from trading.agents import ExecutionAgent
         from trading.agents.integration import ExecutionAgentIntegration
         
@@ -576,7 +571,7 @@ class ExecutionAgentView(APIView):
             except TradingDecision.DoesNotExist:
                 return Response({"detail": "Decision not found"}, status=status.HTTP_404_NOT_FOUND)
             
-            # Если решение HOLD, не выполняем
+            # If decision HOLD, skip execution
             if decision.decision == "HOLD":
                 return Response({
                     "detail": "Decision is HOLD, no execution needed",
@@ -584,35 +579,35 @@ class ExecutionAgentView(APIView):
                     "status": "skipped"
                 })
             
-            # Получаем настройки пользователя
+            # Get user settings
             user_settings, _ = UserSettings.objects.get_or_create(
                 user=request.user,
                 defaults={"risk_level": "medium"}
             )
             
-            # Создаем ExecutionAgent
+            # Create ExecutionAgent
             execution_agent = ExecutionAgent(
-                execution_mode="simulated",  # Всегда симулируем для безопасности
+                execution_mode="simulated",  # Always simulate for safety
                 enable_slippage=True,
                 slippage_factor=0.001,  # 0.1% slippage
                 commission_rate=0.001,  # 0.1% commission
             )
             
-            # Формируем решение для агента из TradingDecision
+            # Build decision for agent from TradingDecision
             decision_dict = {
                 "action": decision.decision,
                 "ticker": decision.symbol.symbol,
                 "quantity": decision.metadata.get("quantity", 1),
                 "price": decision.metadata.get("price", float(decision.market_data.price) if decision.market_data else 0.0),
-                "confidence": float(decision.confidence / 100) if decision.confidence else 0.5,  # Конвертируем обратно в 0-1
+                "confidence": float(decision.confidence / 100) if decision.confidence else 0.5,  # Convert back to 0-1
                 "timestamp": decision.created_at.isoformat(),
                 "reasoning": decision.reasoning,
             }
             
-            # Выполняем сделку через агента
+            # Execute trade via agent
             execution_result = execution_agent.receive_decision(decision_dict)
             
-            # Сохраняем в БД через интеграцию
+            # Save to DB via integration
             execution_integration = ExecutionAgentIntegration(request.user)
             trade = execution_integration.execute_trade(
                 symbol=decision.symbol,
@@ -639,15 +634,15 @@ class ExecutionAgentView(APIView):
         except Exception as e:
             logger.error(f"Error in execution agent endpoint: {str(e)}", exc_info=True)
             return Response(
-                {"detail": f"Ошибка выполнения сделки: {str(e)}"},
+                {"detail": f"Error executing trade: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
 class DemoOrderView(APIView):
     """
-    Простой эндпойнт для ручного размещения демо-сделок (market BUY/SELL).
-    Все операции выполняются только в БД, без отправки на биржу.
+    Simple endpoint for manual demo orders (market BUY/SELL).
+    All operations are DB-only, no exchange submission.
     """
     permission_classes = [IsAuthenticated]
 
@@ -670,16 +665,16 @@ class DemoOrderView(APIView):
         account = _ensure_demo_account(request.user)
         market_service = get_market_data_service()
 
-        # Получаем свежую цену и записываем тик
+        # Get fresh price and record tick
         tick = market_service.get_latest_data(symbol_code)
         if not tick:
-            return Response({"detail": "Не удалось получить цену для символа"}, status=status.HTTP_502_BAD_GATEWAY)
+            return Response({"detail": "Failed to get price for symbol"}, status=status.HTTP_502_BAD_GATEWAY)
 
         price = Decimal(str(tick.get("price", "0")))
         if price <= 0:
-            return Response({"detail": "Некорректная цена для символа"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid price for symbol"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Проверяем последнюю запись и создаем новую если цена изменилась
+        # Check last record, create new if price changed
         latest_tick = MarketData.objects.filter(symbol=symbol).order_by("-timestamp").first()
         if not latest_tick or latest_tick.timestamp < tick["timestamp"]:
             MarketData.objects.create(
@@ -700,7 +695,7 @@ class DemoOrderView(APIView):
 
             if action == "BUY":
                 cost = price * quantity
-                # Проверяем доступность средств перед покупкой
+                # Check fund availability before buy
                 available_cash = account.initial_balance - account.used_margin
                 from django.db.models import Sum
                 closed_pnl = Trade.objects.filter(
@@ -712,7 +707,7 @@ class DemoOrderView(APIView):
                 
                 if available_cash < cost:
                     return Response({
-                        "detail": f"Недостаточно средств. Доступно: ${available_cash:.2f}, Требуется: ${cost:.2f}"
+                        "detail": f"Insufficient funds. Available: ${available_cash:.2f}, Required: ${cost:.2f}"
                     }, status=status.HTTP_400_BAD_REQUEST)
 
                 position, created = Position.objects.get_or_create(
@@ -734,7 +729,7 @@ class DemoOrderView(APIView):
                     position.is_open = True
                     position.save(update_fields=["quantity", "entry_price", "current_price", "is_open"])
 
-                # НЕ изменяем balance вручную - он пересчитается автоматически
+                # Do NOT change balance manually - it is recalculated automatically
                 trade = Trade.objects.create(
                     user=request.user,
                     symbol=symbol,
@@ -747,10 +742,10 @@ class DemoOrderView(APIView):
                 try:
                     position = Position.objects.get(user=request.user, symbol=symbol, is_open=True)
                 except Position.DoesNotExist:
-                    return Response({"detail": "Нет открытой позиции для продажи"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"detail": "No open position to sell"}, status=status.HTTP_400_BAD_REQUEST)
 
                 if position.quantity < quantity:
-                    return Response({"detail": "Недостаточный объем позиции для продажи"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"detail": "Insufficient position size for sell"}, status=status.HTTP_400_BAD_REQUEST)
 
                 realized_pnl = (price - position.entry_price) * quantity
 
@@ -766,7 +761,7 @@ class DemoOrderView(APIView):
                     position.current_price = price
                     position.save(update_fields=["quantity", "current_price"])
 
-                # НЕ изменяем balance вручную - он пересчитается автоматически
+                # Do NOT change balance manually - it is recalculated automatically
                 trade = Trade.objects.create(
                     user=request.user,
                     symbol=symbol,
@@ -777,10 +772,10 @@ class DemoOrderView(APIView):
                     pnl=realized_pnl,
                 )
 
-            # После сделки пересчитываем маржу и свободные средства
+            # After trade, recalculate margin and free cash
             _recalculate_account_balances(account, request.user)
 
-            # Логируем цепочку агентов в виде сообщений
+            # Log agent chain as messages
             Message.objects.create(
                 user=request.user,
                 from_agent="MARKET_MONITOR",
@@ -827,13 +822,13 @@ class DemoOrderView(APIView):
             )
 
 class ClosePositionView(APIView):
-    """Закрытие открытой позиции (продать всю позицию)"""
+    """Close open position (sell entire position)"""
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
         """
-        Закрыть позицию целиком
-        Принимает: position_id
+        Close entire position
+        Accepts: position_id
         """
         position_id = request.data.get("position_id")
         if not position_id:
@@ -844,11 +839,11 @@ class ClosePositionView(APIView):
         except Position.DoesNotExist:
             return Response({"detail": "Position not found or already closed"}, status=status.HTTP_404_NOT_FOUND)
         
-        # Используем DemoOrderView для продажи
+        # Use DemoOrderView for sell
         symbol_code = position.symbol.symbol
         quantity = position.quantity
         
-        # Получаем текущую цену
+        # Get current price
         market_service = get_market_data_service()
         tick = market_service.get_latest_data(symbol_code)
         if not tick:
@@ -858,7 +853,7 @@ class ClosePositionView(APIView):
         if price <= 0:
             return Response({"detail": "Invalid price"}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Создаем MarketData если нужно
+        # Create MarketData if needed
         latest_tick = MarketData.objects.filter(symbol=position.symbol).order_by("-timestamp").first()
         if not latest_tick or latest_tick.timestamp < tick["timestamp"]:
             MarketData.objects.create(
@@ -874,17 +869,17 @@ class ClosePositionView(APIView):
             )
         
         with transaction.atomic():
-            # Рассчитываем PnL
+            # Calculate PnL
             realized_pnl = (price - position.entry_price) * quantity
             
-            # Закрываем позицию
+            # Close position
             position.quantity = Decimal("0")
             position.is_open = False
             position.current_price = price
             position.closed_at = timezone.now()
             position.save(update_fields=["quantity", "is_open", "current_price", "closed_at"])
             
-            # Создаем сделку SELL
+            # Create SELL trade
             trade = Trade.objects.create(
                 user=request.user,
                 symbol=position.symbol,
@@ -895,13 +890,13 @@ class ClosePositionView(APIView):
                 pnl=realized_pnl,
             )
             
-            # Получаем или создаем account
+            # Get or create account
             account = _ensure_demo_account(request.user)
             
-            # Пересчитываем баланс
+            # Recalculate balance
             _recalculate_account_balances(account, request.user)
             
-            # Логируем сообщения
+            # Log messages
             Message.objects.create(
                 user=request.user,
                 from_agent="MARKET_MONITOR",
@@ -941,38 +936,38 @@ class ClosePositionView(APIView):
 
 
 class PortfolioView(APIView):
-    """Эндпойнт для получения данных портфеля"""
+    """Endpoint for portfolio data"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить сводку портфеля"""
+        """Get portfolio summary"""
         from django.db.models import Sum, Count, Q
         from django.utils import timezone as tz
 
-        # Автоподготовка демо-окружения
+        # Auto-prepare demo environment
         _ensure_demo_symbol(request.user, DEFAULT_DEMO_SYMBOL)
         account = _ensure_demo_account(request.user)
 
-        # Обновляем текущие цены для открытых позиций
+        # Update current prices for open positions
         open_positions = Position.objects.filter(user=request.user, is_open=True)
         for position in open_positions:
             _refresh_position_price(position)
 
-        # Рассчитываем использованную маржу (сумма всех открытых позиций)
+        # Calculate used margin (sum of all open positions)
         used_margin = Decimal("0.00")
         for position in open_positions:
             if position.current_price:
                 used_margin += position.current_price * position.quantity
 
-        # Обновляем счет
+        # Update account
         account.used_margin = used_margin
         account.free_cash = account.balance - used_margin
         account.save(update_fields=["used_margin", "free_cash"])
 
-        # Статистика по сделкам
+        # Trade statistics
         total_trades = Trade.objects.filter(user=request.user).count()
         
-        # P&L за сегодня
+        # Today P&L
         today_start = tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_trades = Trade.objects.filter(
             user=request.user,
@@ -980,9 +975,9 @@ class PortfolioView(APIView):
         )
         today_pnl = today_trades.aggregate(total=Sum("pnl"))["total"] or Decimal("0.00")
 
-        # Общий P&L (из всех закрытых позиций и сделок)
+        # Total P&L (from all closed positions and trades)
         total_pnl = Trade.objects.filter(user=request.user).aggregate(total=Sum("pnl"))["total"] or Decimal("0.00")
-        # Также добавляем P&L от открытых позиций
+        # Add P&L from open positions
         for position in open_positions:
             if position.current_price:
                 position_pnl = (position.current_price - position.entry_price) * position.quantity
@@ -999,16 +994,16 @@ class PortfolioView(APIView):
 
 
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet для открытых позиций"""
+    """ViewSet for open positions"""
     permission_classes = [IsAuthenticated]
     serializer_class = PositionSerializer
 
     def get_queryset(self):
-        """Получить только открытые позиции пользователя"""
+        """Get only user open positions"""
         _ensure_demo_symbol(self.request.user, DEFAULT_DEMO_SYMBOL)
         queryset = Position.objects.filter(user=self.request.user, is_open=True)
         
-        # Обновляем текущие цены
+        # Update current prices
         for position in queryset:
             latest_data = MarketData.objects.filter(symbol=position.symbol).order_by("-timestamp").first()
             if latest_data:
@@ -1019,12 +1014,12 @@ class PositionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class TradeViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet для истории сделок"""
+    """ViewSet for trade history"""
     permission_classes = [IsAuthenticated]
     serializer_class = TradeSerializer
 
     def get_queryset(self):
-        """Получить историю сделок пользователя с ограничением по limit"""
+        """Get user trade history with limit"""
         limit_param = self.request.query_params.get("limit")
         try:
             limit = int(limit_param) if limit_param else 20
@@ -1034,19 +1029,19 @@ class TradeViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class PortfolioView(APIView):
-    """Эндпойнт агрегированных данных портфеля (баланс, позиции, сделки)"""
+    """Endpoint for aggregated portfolio data (balance, positions, trades)"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         from django.db.models import Sum
         from django.utils import timezone as tz
 
-        # Гарантируем демо-аккаунт и символ, пересчитываем баланс
+        # Ensure demo account and symbol, recalc balance
         _ensure_demo_symbol(request.user, DEFAULT_DEMO_SYMBOL)
         account = _ensure_demo_account(request.user)
         _recalculate_account_balances(account, request.user)
 
-        # Открытые позиции и последние сделки
+        # Open positions and latest trades
         positions_qs = Position.objects.filter(user=request.user, is_open=True).select_related("symbol")
         trades_qs = Trade.objects.filter(user=request.user).select_related("symbol").order_by("-executed_at")[:50]
 
@@ -1074,11 +1069,11 @@ class PortfolioView(APIView):
 
 
 class EquityCurveView(APIView):
-    """Эндпойнт для данных equity curve"""
+    """Endpoint for equity curve data"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить данные для графика equity curve"""
+        """Get equity curve chart data"""
         from django.db.models import Sum, Min, Max
         from django.utils import timezone as tz
         from datetime import timedelta
@@ -1089,7 +1084,7 @@ class EquityCurveView(APIView):
         initial_balance = float(account.initial_balance)
         current_balance = float(account.balance)
 
-        # Учитываем текущие открытые позиции (unrealized PnL)
+        # Include current open positions (unrealized PnL)
         open_positions = Position.objects.filter(user=request.user, is_open=True)
         total_unrealized = Decimal("0.00")
         for position in open_positions:
@@ -1097,8 +1092,8 @@ class EquityCurveView(APIView):
             if position.current_price:
                 total_unrealized += (position.current_price - position.entry_price) * position.quantity
 
-        # Рассчитываем max drawdown
-        # Получаем все сделки с P&L
+        # Calculate max drawdown
+        # Get all trades with P&L
         trades = Trade.objects.filter(user=request.user, pnl__isnull=False).order_by("executed_at")
         
         max_drawdown = Decimal("0.00")
@@ -1113,18 +1108,18 @@ class EquityCurveView(APIView):
             if drawdown < max_drawdown:
                 max_drawdown = Decimal(str(drawdown))
 
-        # Рассчитываем Sharpe Ratio (упрощенная версия)
-        # Для реального расчета нужны более сложные вычисления
-        sharpe_ratio = Decimal("1.24")  # Заглушка, можно улучшить позже
+        # Calculate Sharpe Ratio (simplified)
+        # Real calc needs more complex computations
+        sharpe_ratio = Decimal("1.24")  # Placeholder, can improve later
 
-        # Генерируем данные для графика (последние 30 дней)
+        # Generate chart data (last 30 days)
         equity_data = []
         days = 30
         today = tz.now().date()
         
         for i in range(days + 1):
             date = today - timedelta(days=days - i)
-            # Рассчитываем баланс на эту дату
+            # Calculate balance for this date
             trades_until_date = Trade.objects.filter(
                 user=request.user,
                 executed_at__date__lte=date
@@ -1137,7 +1132,7 @@ class EquityCurveView(APIView):
                 "date": date.strftime("%b %d"),
             })
 
-        # Добавляем unrealized PnL в последний день
+        # Add unrealized PnL to last day
         if equity_data:
             equity_data[-1]["balance"] = equity_data[-1]["balance"] + float(total_unrealized)
         portfolio_equity = current_balance + float(total_unrealized)
@@ -1152,12 +1147,12 @@ class EquityCurveView(APIView):
 
 
 class AgentsDetailView(APIView):
-    """Эндпойнт для получения детальной информации об агентах"""
+    """Endpoint for agent details"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить список всех агентов с детальной информацией"""
-        # Получаем или создаем статусы для всех типов агентов
+        """Get list of all agents with details"""
+        # Get or create statuses for all agent types
         agent_types = ["MARKET_MONITOR", "DECISION_MAKER", "EXECUTION"]
         agents = []
         
@@ -1169,7 +1164,7 @@ class AgentsDetailView(APIView):
             )
             serializer = AgentDetailSerializer(status_obj)
             agent_data = serializer.data
-            # Преобразуем id в строку для соответствия фронтенду
+            # Convert id to string for frontend
             agent_data["id"] = str(status_obj.id)
             agents.append(agent_data)
         
@@ -1177,12 +1172,12 @@ class AgentsDetailView(APIView):
 
 
 class MessagesViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet для сообщений между агентами"""
+    """ViewSet for inter-agent messages"""
     permission_classes = [IsAuthenticated]
     serializer_class = MessageSerializer
 
     def get_queryset(self):
-        """Получить все сообщения пользователя, отсортированные по времени"""
+        """Get all user messages sorted by time"""
         limit_param = self.request.query_params.get("limit")
         try:
             limit = int(limit_param) if limit_param else 50
@@ -1192,16 +1187,16 @@ class MessagesViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class PerformanceMetricsView(APIView):
-    """Эндпойнт для метрик производительности"""
+    """Endpoint for performance metrics"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Рассчитывает все метрики производительности на основе сделок и позиций"""
+        """Calculate performance metrics from trades and positions"""
         from decimal import Decimal
         from django.db.models import Sum, Count, Avg, Q
         from django.utils import timezone as tz
 
-        # Получаем счет
+        # Get account
         account, _ = Account.objects.get_or_create(
             user=request.user,
             defaults={"balance": Decimal("10000.00"), "initial_balance": Decimal("10000.00")}
@@ -1212,20 +1207,20 @@ class PerformanceMetricsView(APIView):
         total_return = current_balance - initial_balance
         return_percent = (total_return / initial_balance * 100) if initial_balance > 0 else 0
 
-        # Статистика по сделкам
+        # Trade statistics
         all_trades = Trade.objects.filter(user=request.user, pnl__isnull=False)
         total_trades = all_trades.count()
 
-        # Выигрышные и проигрышные сделки
+        # Winning and losing trades
         winning_trades = all_trades.filter(pnl__gt=0)
         losing_trades = all_trades.filter(pnl__lt=0)
         winning_count = winning_trades.count()
         losing_count = losing_trades.count()
 
-        # Средние значения
+        # Averages
         avg_win = float(winning_trades.aggregate(avg=Avg("pnl"))["avg"] or Decimal("0.00"))
         avg_loss = float(losing_trades.aggregate(avg=Avg("pnl"))["avg"] or Decimal("0.00"))
-        avg_loss = abs(avg_loss) if avg_loss < 0 else avg_loss  # Делаем положительным для расчета
+        avg_loss = abs(avg_loss) if avg_loss < 0 else avg_loss  # Make positive for calculation
 
         # Win Rate
         win_rate = (winning_count / total_trades * 100) if total_trades > 0 else 0
@@ -1252,9 +1247,9 @@ class PerformanceMetricsView(APIView):
             if drawdown < max_drawdown:
                 max_drawdown = Decimal(str(drawdown))
 
-        # Sharpe Ratio (упрощенная версия)
-        # Для реального расчета нужны более сложные вычисления с волатильностью
-        sharpe_ratio = Decimal("1.24")  # Заглушка, можно улучшить позже
+        # Sharpe Ratio (simplified)
+        # Real calc needs more complex computations with volatility
+        sharpe_ratio = Decimal("1.24")  # Placeholder, can improve later
 
         return Response({
             "totalReturn": float(total_return),
@@ -1266,24 +1261,24 @@ class PerformanceMetricsView(APIView):
             "winningTrades": winning_count,
             "losingTrades": losing_count,
             "avgWin": round(avg_win, 2),
-            "avgLoss": round(-avg_loss, 2) if avg_loss > 0 else 0,  # Возвращаем отрицательным
+            "avgLoss": round(-avg_loss, 2) if avg_loss > 0 else 0,  # Return as negative
             "winLossRatio": round(win_loss_ratio, 2),
             "returnPercent": round(return_percent, 1),
         })
 
 
 class PnLCurveView(APIView):
-    """Эндпойнт для данных P&L Curve"""
+    """Endpoint for P&L curve data"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить данные для графика P&L Curve (последние 30 дней)"""
+        """Get P&L curve chart data (last 30 days)"""
         from decimal import Decimal
         from django.db.models import Sum
         from django.utils import timezone as tz
         from datetime import timedelta
 
-        # Получаем счет
+        # Get account
         account, _ = Account.objects.get_or_create(
             user=request.user,
             defaults={"balance": Decimal("10000.00"), "initial_balance": Decimal("10000.00")}
@@ -1292,7 +1287,7 @@ class PnLCurveView(APIView):
         initial_balance = float(account.initial_balance)
         current_balance = float(account.balance)
 
-        # Генерируем данные PnL (последние 30 дней)
+        # Generate PnL data (last 30 days)
         pnl_data = []
         days = 30
         today = tz.now().date()
@@ -1322,11 +1317,11 @@ class PnLCurveView(APIView):
 
 
 class MonthlyBreakdownView(APIView):
-    """Эндпойнт для разбивки P&L по периодам"""
+    """Endpoint for P&L breakdown by period"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить P&L разбивку по периодам (Today, Yesterday, This Week, по месяцам)"""
+        """Get P&L breakdown by period (Today, Yesterday, This Week, by month)"""
         from decimal import Decimal
         from django.db.models import Sum
         from django.utils import timezone as tz
@@ -1334,7 +1329,7 @@ class MonthlyBreakdownView(APIView):
 
         breakdown = []
 
-        # Сегодня
+        # Today
         today_start = tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_pnl = Trade.objects.filter(
             user=request.user,
@@ -1346,7 +1341,7 @@ class MonthlyBreakdownView(APIView):
             "pnl": float(today_pnl),
         })
 
-        # Вчера
+        # Yesterday
         yesterday_start = today_start - timedelta(days=1)
         yesterday_pnl = Trade.objects.filter(
             user=request.user,
@@ -1359,7 +1354,7 @@ class MonthlyBreakdownView(APIView):
             "pnl": float(yesterday_pnl),
         })
 
-        # Эта неделя
+        # This week
         week_start = today_start - timedelta(days=today_start.weekday())
         week_pnl = Trade.objects.filter(
             user=request.user,
@@ -1371,7 +1366,7 @@ class MonthlyBreakdownView(APIView):
             "pnl": float(week_pnl),
         })
 
-        # Последние 3 месяца
+        # Last 3 months
         now = tz.now()
         for i in range(3):
             month_date = now - timedelta(days=30 * (i + 1))
@@ -1399,11 +1394,11 @@ class MonthlyBreakdownView(APIView):
 
 
 class SettingsView(APIView):
-    """Эндпойнт для получения и обновления настроек пользователя"""
+    """Endpoint for user settings get/update"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить настройки пользователя"""
+        """Get user settings"""
         settings, created = UserSettings.objects.get_or_create(
             user=request.user,
             defaults={
@@ -1428,7 +1423,7 @@ class SettingsView(APIView):
         return Response(serializer.data)
 
     def put(self, request):
-        """Обновить настройки пользователя"""
+        """Update user settings"""
         from decimal import Decimal
 
         settings, created = UserSettings.objects.get_or_create(
@@ -1452,10 +1447,10 @@ class SettingsView(APIView):
             }
         )
 
-        # Обновляем поля из запроса
+        # Update fields from request
         data = request.data
 
-        # Преобразуем названия полей из фронтенда в названия модели
+        # Map frontend field names to model
         if "status" in data:
             settings.status = data["status"]
         if "speed" in data:
@@ -1493,16 +1488,16 @@ class SettingsView(APIView):
         return Response(serializer.data)
 
     def patch(self, request):
-        """Частичное обновление настроек (аналогично PUT)"""
+        """Partial settings update (same as PUT)"""
         return self.put(request)
 
 
 class DashboardOverviewView(APIView):
-    """Эндпойнт для получения данных Dashboard Overview"""
+    """Endpoint for dashboard overview data"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить данные для Dashboard Overview (KPICards)"""
+        """Get dashboard overview data (KPICards)"""
         from django.db.models import Sum, Count, Q
         from django.utils import timezone as tz
 
@@ -1511,7 +1506,7 @@ class DashboardOverviewView(APIView):
 
         balance = float(account.balance)
 
-        # P&L за сегодня
+        # Today P&L
         today_start = tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_trades = Trade.objects.filter(
             user=request.user,
@@ -1527,7 +1522,7 @@ class DashboardOverviewView(APIView):
         winning_trades = all_trades.filter(pnl__gt=0).count()
         win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
 
-        # Статус агентов
+        # Agent status
         agent_statuses = AgentStatus.objects.filter(user=request.user)
         active_count = agent_statuses.filter(status="RUNNING").count()
         total_agents = agent_statuses.count()
@@ -1544,38 +1539,38 @@ class DashboardOverviewView(APIView):
 
 
 class MarketChartView(APIView):
-    """Эндпойнт для получения данных графика рынка"""
+    """Endpoint for market chart data"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить данные для графика по символу"""
+        """Get chart data by symbol"""
         symbol_param = request.query_params.get("symbol", DEFAULT_DEMO_SYMBOL)
         timeframe = request.query_params.get("timeframe", "1h")  # 15m, 1h, 4h, 1d
 
-        # Гарантируем наличие символа и свежих данных
+        # Ensure symbol and fresh data exist
         symbol = _ensure_demo_symbol(request.user, symbol_param)
 
-        # Определяем период для данных в зависимости от timeframe
+        # Determine data period by timeframe
         from datetime import timedelta
         from django.utils import timezone as tz
 
         timeframe_map = {
-            "15m": timedelta(hours=6),  # 6 часов данных для 15-минутного графика
-            "1h": timedelta(days=7),    # 7 дней для часового графика
-            "4h": timedelta(days=30),   # 30 дней для 4-часового графика
-            "1d": timedelta(days=90),    # 90 дней для дневного графика
+            "15m": timedelta(hours=6),  # 6h data for 15m chart
+            "1h": timedelta(days=7),    # 7d for 1h chart
+            "4h": timedelta(days=30),   # 30d for 4h chart
+            "1d": timedelta(days=90),    # 90d for daily chart
         }
 
         period = timeframe_map.get(timeframe, timedelta(days=7))
         start_time = tz.now() - period
 
-        # Получаем данные рынка
+        # Get market data
         market_data = MarketData.objects.filter(
             symbol=symbol,
             timestamp__gte=start_time
         ).order_by("timestamp")
 
-        # Формируем данные для графика
+        # Format chart data
         chart_data = []
         for data in market_data:
             chart_data.append({
@@ -1584,7 +1579,7 @@ class MarketChartView(APIView):
                 "volume": int(data.volume) if data.volume else None,
             })
 
-        # Получаем текущую цену (последняя запись)
+        # Get current price (latest record)
         current_price = float(market_data.last().price) if market_data.exists() else 0.0
 
         return Response({
@@ -1595,27 +1590,27 @@ class MarketChartView(APIView):
 
 
 class MarketHeatmapView(APIView):
-    """Эндпойнт для получения данных Market Heatmap"""
+    """Endpoint for market heatmap data"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Получить данные для heatmap (все активные символы с изменениями)"""
-        # Гарантируем наличие базового демо-символа
+        """Get heatmap data (all active symbols with changes)"""
+        # Ensure base demo symbol exists
         _ensure_demo_symbol(request.user, DEFAULT_DEMO_SYMBOL)
 
-        # Получаем все активные символы пользователя
+        # Get all active user symbols
         symbols = Symbol.objects.filter(user=request.user, is_active=True)
 
         market_data_list = []
         for symbol in symbols:
-            # Получаем последние 2 записи для расчета изменения
+            # Get last 2 records for change calc
             latest_data = MarketData.objects.filter(symbol=symbol).order_by("-timestamp")[:2]
             
             if latest_data.count() >= 2:
                 current = latest_data[0]
                 previous = latest_data[1]
                 
-                # Рассчитываем процент изменения
+                # Calculate percent change
                 change = float(current.price - previous.price)
                 change_percent = float(((current.price - previous.price) / previous.price) * 100) if previous.price > 0 else 0.0
                 market_data_list.append({
@@ -1628,19 +1623,19 @@ class MarketHeatmapView(APIView):
                     "changePercent": round(change_percent, 2),
                 })
             elif latest_data.count() == 1:
-                # Если только одна запись, используем её как текущую и предыдущую
+                # If only one record, use as both current and previous
                 current = latest_data[0]
                 market_data_list.append({
                     "symbol": symbol.symbol,
                     "price": float(current.price),
-                    "previousPrice": float(current.price),  # Нет изменения
+                    "previousPrice": float(current.price),  # No change
                     "change": 0.0,
                     "volume": int(current.volume) if current.volume else 0,
                     "timestamp": current.timestamp,
                     "changePercent": 0.0,
                 })
             else:
-                # Если нет данных, все равно добавляем символ с нулевыми значениями
+                # If no data, add symbol with zeros
                 market_data_list.append({
                     "symbol": symbol.symbol,
                     "price": 0.0,
@@ -1651,8 +1646,8 @@ class MarketHeatmapView(APIView):
                     "changePercent": 0.0,
                 })
 
-        # Сортируем по изменению (от большего к меньшему) и возвращаем простой список,
-        # чтобы фронт получал сразу готовые данные для heatmap.
+        # Sort by change (desc) and return simple list
+        # so frontend gets ready heatmap data.
         market_data_list.sort(key=lambda x: x.get("changePercent", 0.0), reverse=True)
 
         return Response(market_data_list)

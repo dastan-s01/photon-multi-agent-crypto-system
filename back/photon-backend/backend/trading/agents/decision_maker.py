@@ -52,8 +52,8 @@ class DecisionMakingAgent:
         use_historical_training: bool = True,  # Use real historical data for training
         training_ticker: Optional[str] = None,  # Ticker for historical training
         training_period: str = "1y",  # Period for historical training data
-        user_id: Optional[int] = None,  # ID пользователя для доступа к БД для обучения
-        enable_continuous_learning: bool = True  # Включить постоянное обучение
+        user_id: Optional[int] = None,  # User ID for DB access during training
+        enable_continuous_learning: bool = True  # Enable continuous learning
     ):
         """
         Initialize decision-making agent.
@@ -69,7 +69,7 @@ class DecisionMakingAgent:
             use_historical_training: If True, train on real historical data (default: True)
             training_ticker: Ticker for historical training data (default: "SPY")
             training_period: Period for historical training ("1y", "6mo", "3mo", "1mo")
-            user_id: ID пользователя для доступа к БД для обучения на реальных данных
+            user_id: User ID for DB access for training on real data
         """
         self.model_type = model_type
         self.risk_tolerance = risk_tolerance
@@ -79,7 +79,7 @@ class DecisionMakingAgent:
         self.use_historical_training = use_historical_training
         self.training_ticker = training_ticker
         self.training_period = training_period
-        self.user_id = user_id  # Сохраняем user_id для доступа к БД
+        self.user_id = user_id  # Store user_id for DB access
         
         # AI Model
         self.model = None
@@ -88,11 +88,11 @@ class DecisionMakingAgent:
         self.is_trained = False
         
         # Continuous learning settings
-        self.enable_continuous_learning = enable_continuous_learning  # Включить постоянное обучение
-        self.retrain_interval = 10  # Переобучать каждые N новых решений
-        self.retrain_min_samples = 50  # Минимум новых samples для переобучения
-        self.decisions_since_retrain = 0  # Счетчик решений с последнего переобучения
-        self.last_retrain_time = None  # Время последнего переобучения
+        self.enable_continuous_learning = enable_continuous_learning  # Enable continuous learning
+        self.retrain_interval = 10  # Retrain every N new decisions
+        self.retrain_min_samples = 50  # Min new samples for retrain
+        self.decisions_since_retrain = 0  # Decisions count since last retrain
+        self.last_retrain_time = None  # Last retrain time
         
         # Decision history
         self.history_size = history_size
@@ -176,7 +176,7 @@ class DecisionMakingAgent:
             features = self._extract_features(market_data)
             
             # Make decision using AI or rules
-            # ВАЖНО: AI модель используется по умолчанию, rule-based только как fallback
+            # IMPORTANT: AI model is default, rule-based is fallback only
             if self.enable_ai and self.is_trained:
                 logger.info(f"Using AI model ({self.model_type}) for decision making")
                 decision = self._make_ai_decision(features, market_data)
@@ -190,9 +190,9 @@ class DecisionMakingAgent:
             # Apply risk management
             decision = self._apply_risk_management(decision, market_data)
             
-            # ПРИМЕЧАНИЕ: Для симуляции разрешаем SELL даже без открытых позиций
-            # Это ускоряет сбор данных для обучения модели
-            # Проверка на открытые позиции убрана - ExecutionAgent обработает SELL в любом случае
+            # NOTE: For simulation allow SELL even without open positions
+            # Speeds up data collection for model training
+            # Position check removed - ExecutionAgent handles SELL anyway
             
             # Store in history
             self.decision_history.append({
@@ -204,16 +204,16 @@ class DecisionMakingAgent:
             })
             
             # Train model if needed (initial training)
-            # ВАЖНО: Модель обучается автоматически при первом использовании
+            # IMPORTANT: Model trains automatically on first use
             if self.enable_ai and not self.is_trained:
                 logger.info("Training AI model on first use with historical data...")
                 self._train_initial_model()
                 logger.info(f"AI model trained successfully. Model type: {self.model_type}, Trained: {self.is_trained}")
-                # После обучения пересчитываем решение с использованием AI модели
+                # After training recalc decision using AI model
                 if self.is_trained:
                     logger.info("Recomputing decision with trained AI model...")
                     decision = self._make_ai_decision(features, market_data)
-                    # Применяем risk management к новому решению
+                    # Apply risk management to new decision
                     decision = self._apply_risk_management(decision, market_data)
             
             # Continuous learning: retrain periodically
@@ -465,20 +465,20 @@ class DecisionMakingAgent:
         confidence = decision.get("confidence", 0.0)
         risk_score = decision.get("risk_score", 0.5)
         
-        # Check minimum confidence (более мягкая проверка для низких порогов)
+        # Check minimum confidence (relaxed for low thresholds)
         if confidence < self.min_confidence and action != "HOLD":
-            # Если min_confidence очень низкий (< 0.1), разрешаем действия с еще меньшей уверенностью
+            # If min_confidence very low (< 0.1), allow actions with lower confidence
             if self.min_confidence < 0.1 and confidence >= self.min_confidence * 0.5:
                 logger.debug(f"Allowing low confidence action: {confidence:.2f} >= {self.min_confidence * 0.5:.2f}")
             else:
                 logger.info(f"Decision rejected: confidence {confidence:.2f} < min {self.min_confidence}")
                 return self._create_hold_decision(market_data, "Low confidence")
         
-        # Check risk score (более мягкая проверка для симуляции)
+        # Check risk score (relaxed for simulation)
         max_risk = self.risk_params.get("max_drawdown", 0.15)
-        # Если min_confidence очень низкий, увеличиваем допустимый риск
+        # If min_confidence very low, increase allowed risk
         if self.min_confidence < 0.1:
-            max_risk = max_risk * 1.5  # Увеличиваем допустимый риск на 50%
+            max_risk = max_risk * 1.5  # Increase allowed risk by 50%
         if risk_score > max_risk and action != "HOLD":
             logger.info(f"Decision rejected: risk score {risk_score:.2f} > max {max_risk}")
             return self._create_hold_decision(market_data, "Risk too high")
@@ -530,11 +530,11 @@ class DecisionMakingAgent:
         try:
             logger.info("Attempting to train on real historical data...")
             X, y = self._prepare_historical_training_data()
-            # Уменьшено минимальное требование для малого количества данных (например, Bybit 200 свечек)
-            min_samples = 20  # Минимум 20 samples для обучения
+            # Reduced min requirement for small datasets (e.g. Bybit 200 candles)
+            min_samples = 20  # Min 20 samples for training
             if X is not None and len(X) >= min_samples:
                 logger.info(f"Using {len(X)} historical samples for training")
-                # Если данных мало, используем меньше деревьев и меньшую глубину
+                # If few data, use fewer trees and shallower depth
                 if len(X) < 100:
                     logger.info(f"Small dataset ({len(X)} samples), using reduced model complexity")
             else:
@@ -546,20 +546,20 @@ class DecisionMakingAgent:
             self.is_trained = False
             return
         
-        # Проверяем что данные есть
+        # Verify data exists
         if X is None or len(X) == 0:
             logger.error("No training data available. Model will use rule-based logic.")
             self.is_trained = False
             return
         
-        # Для малого количества данных используем меньший test_size
-        test_size = 0.2 if len(X) > 50 else 0.1  # Меньший test_size для малых датасетов
+        # Use smaller test_size for small datasets
+        test_size = 0.2 if len(X) > 50 else 0.1
         
         # Split data
         if len(X) > 10:
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         else:
-            # Если данных очень мало, используем все для обучения
+            # If very few data, use all for training
             logger.warning(f"Very small dataset ({len(X)} samples), using all data for training")
             X_train, X_test, y_train, y_test = X, X, y, y
         
@@ -569,40 +569,40 @@ class DecisionMakingAgent:
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test) if len(X_test) > 0 else X_train_scaled
         
-        # Train model - адаптируем параметры под размер данных
+        # Train model - adapt params to data size
         n_samples = len(X_train)
         if n_samples < 50:
-            # Очень мало данных - простая модель
+            # Very few data - simple model
             n_estimators = 20
             max_depth = 3
         elif n_samples < 100:
-            # Мало данных - средняя модель
+            # Few data - medium model
             n_estimators = 50
             max_depth = 5
         else:
-            # Достаточно данных - полная модель
+            # Enough data - full model
             n_estimators = 100
             max_depth = 10
         
         if self.model_type == "random_forest":
-            # Используем class_weight для балансировки классов (больше BUY/SELL, меньше HOLD)
-            # 'balanced' автоматически взвешивает классы обратно пропорционально их частоте
+            # Use class_weight to balance classes (more BUY/SELL, less HOLD)
+            # 'balanced' weighs classes inversely by frequency
             self.model = RandomForestClassifier(
                 n_estimators=n_estimators, 
                 random_state=42, 
                 max_depth=max_depth,
-                min_samples_split=2,  # Минимум для малых датасетов
+                min_samples_split=2,  # Min for small datasets
                 min_samples_leaf=1,
-                class_weight='balanced'  # Балансировка классов для уменьшения HOLD
+                class_weight='balanced'  # Class balance to reduce HOLD
             )
         elif self.model_type == "gradient_boosting":
-            # GradientBoosting не поддерживает class_weight напрямую, но можем использовать sample_weight
-            # Для простоты используем те же параметры, но с более агрессивным learning_rate
+            # GradientBoosting has no class_weight; use sample_weight if needed
+            # For simplicity use same params with higher learning_rate for small data
             self.model = GradientBoostingClassifier(
                 n_estimators=n_estimators, 
                 random_state=42, 
                 max_depth=max_depth,
-                learning_rate=0.15 if n_samples >= 100 else 0.25  # Больше learning rate для малых датасетов
+                learning_rate=0.15 if n_samples >= 100 else 0.25  # Higher LR for small datasets
             )
         else:
             self.model = RandomForestClassifier(
@@ -640,16 +640,16 @@ class DecisionMakingAgent:
             
             logger.info(f"Fetching historical data for {ticker} (period: {self.training_period})")
             
-            # Пробуем использовать Binance REST API для криптовалют (больше данных)
+            # Try Binance REST API for crypto (more data)
             use_binance = False
             try:
-                # Проверяем, является ли символ криптовалютой
+                # Check if symbol is cryptocurrency
                 from trading.agents.market_monitor import is_cryptocurrency
                 if is_cryptocurrency(ticker):
                     from trading.services.binance_api import BinanceAPIService
                     binance_service = BinanceAPIService()
                     
-                    # Маппинг period в days
+                    # Map period to days
                     period_days = {
                         "1mo": 30,
                         "3mo": 90,
@@ -669,7 +669,7 @@ class DecisionMakingAgent:
                         use_binance = True
                         logger.info(f"Retrieved {len(historical_data)} candles from Binance")
                         
-                        # Конвертируем в DataFrame
+                        # Convert to DataFrame
                         import pandas as pd
                         df_data = []
                         for candle in historical_data:
@@ -684,7 +684,7 @@ class DecisionMakingAgent:
                         df = pd.DataFrame(df_data)
                         df.index = [candle["timestamp"] for candle in historical_data]
                         
-                        # Используем MarketMonitoringAgent для вычисления индикаторов
+                        # Use MarketMonitoringAgent for indicators
                         market_agent = MarketMonitoringAgent(
                             ticker=ticker,
                             interval="1d",
@@ -704,21 +704,21 @@ class DecisionMakingAgent:
                 use_binance = False
             
             if not use_binance:
-                # Get historical data через MarketMonitoringAgent (Bybit/yfinance)
+                # Get historical data via MarketMonitoringAgent (Bybit/yfinance)
                 market_agent = MarketMonitoringAgent(
                     ticker=ticker,
                     interval="1d",  # Daily data for training
                     period=self.training_period,
                     enable_cache=True,
-                    request_delay=5.0,  # Задержка для обхода блокировок
-                    max_retries=5,  # Больше попыток
-                    backoff_factor=3.0  # Больше времени между попытками
+                    request_delay=5.0,  # Delay to avoid rate limits
+                    max_retries=5,  # More retries
+                    backoff_factor=3.0  # More time between retries
                 )
                 
                 # Get processed data with indicators
                 data = market_agent.get_processed_data(analyze=False)
             
-            # Уменьшено минимальное требование для малого количества данных
+            # Reduced min requirement for small datasets
             if data.empty or len(data) < 20:
                 logger.warning(f"Insufficient historical data: {len(data)} records (need at least 20)")
                 return None, None
@@ -785,38 +785,38 @@ class DecisionMakingAgent:
                 features.append(sma_cross)
                 
                 # Determine label based on future price movement
-                # Правильная логика: смотрим на цену через несколько периодов вперед
-                # и учитываем транзакционные издержки
-                lookahead_periods = 3  # Смотрим на 3 свечи вперед (для daily = 3 дня)
-                transaction_cost_pct = 0.1  # Комиссия 0.1% (типично для криптобирж)
-                min_profit_threshold = 0.5  # Минимальная прибыль 0.5% (с учетом комиссии)
+                # Correct logic: look at price N periods ahead
+                # and account for transaction costs
+                lookahead_periods = 3  # Look 3 candles ahead (daily = 3 days)
+                transaction_cost_pct = 0.1  # Fee 0.1% (typical for crypto exchanges)
+                min_profit_threshold = 0.5  # Min profit 0.5% (after fees)
                 
                 current_price = current_row.get('close', 0.0)
                 
                 if current_price > 0 and i + lookahead_periods < len(data):
-                    # Берем цену через N периодов вперед
+                    # Take price N periods ahead
                     future_row = data.iloc[i + lookahead_periods]
                     future_price = future_row.get('close', 0.0)
                     
                     if future_price > 0:
-                        # Вычисляем изменение цены в процентах
+                        # Compute price change percent
                         price_change_pct = ((future_price - current_price) / current_price) * 100
                         
-                        # Учитываем транзакционные издержки
-                        # Для BUY: нужно покрыть комиссию на вход и выход (0.1% + 0.1% = 0.2%)
-                        # Для SELL: аналогично
+                        # Account for transaction costs
+                        # BUY: must cover entry+exit fee (0.1% + 0.1% = 0.2%)
+                        # SELL: same
                         net_profit_pct = abs(price_change_pct) - (transaction_cost_pct * 2)
                         
                         # Label: 0=SELL, 1=HOLD, 2=BUY
-                        # Простая логика: если цена выросла достаточно (с учетом комиссии) -> BUY
-                        # Если упала достаточно -> SELL, иначе HOLD
-                        # НЕ используем индикаторы в логике меток - они только в фичах!
+                        # If price rose enough (after fees) -> BUY
+                        # If fell enough -> SELL, else HOLD
+                        # Do NOT use indicators in label logic - they are features only
                         if price_change_pct > min_profit_threshold and net_profit_pct > 0:
-                            label = 2  # BUY - цена выросла достаточно для прибыли
+                            label = 2  # BUY - price rose enough for profit
                         elif price_change_pct < -min_profit_threshold and net_profit_pct > 0:
-                            label = 0  # SELL - цена упала достаточно (шорт или продажа)
+                            label = 0  # SELL - price fell enough
                         else:
-                            label = 1  # HOLD - недостаточное движение или не покрывает комиссию
+                            label = 1  # HOLD - insufficient movement or does not cover fees
                     else:
                         label = 1  # HOLD if no future price data
                 else:
@@ -837,42 +837,42 @@ class DecisionMakingAgent:
             logger.error(f"Error preparing historical training data: {e}")
             return None, None
     
-    # УДАЛЕНО: _prepare_synthetic_training_data() - синтетические данные больше не используются
-    # Модель обучается только на реальных исторических данных
-    
+    # REMOVED: _prepare_synthetic_training_data() - synthetic data no longer used
+    # Model trains only on real historical data
+
     def _retrain_with_real_data(self):
         """
-        Переобучает модель на реальных данных из БД (решения + результаты сделок).
-        
-        ВАЖНО: Логика обучения на реальных данных:
-        
-        1. НАЧАЛЬНОЕ ОБУЧЕНИЕ:
-           - Модель обучается на исторических данных (месяц до текущего момента)
-           - Используются пары: (фичи на день X) → (метка на основе цены дня X+1)
-           - Метка определяется по будущей цене: если цена выросла → BUY, упала → SELL
-        
-        2. ПРИНЯТИЕ РЕШЕНИЯ:
-           - Модель принимает решение на основе текущих данных
-           - Открывается позиция (BUY) или закрывается (SELL)
-           - НО: результат еще неизвестен (нужно ждать закрытия позиции)
-        
-        3. ПЕРЕОБУЧЕНИЕ НА РЕАЛЬНЫХ ДАННЫХ:
-           - Используются только ЗАВЕРШЕННЫЕ сделки (BUY → SELL пары)
-           - PnL известен только после закрытия позиции (SELL)
-           - Только сделки старше 1 дня (чтобы избежать обучения на "свежих" данных)
-           - Фичи берутся из решения на момент открытия позиции (BUY)
-           - Метка определяется по результату: PnL > 0 → решение было правильным
-        
+        Retrain model on real DB data (decisions + trade results).
+
+        Logic for real-data training:
+
+        1. INITIAL TRAINING:
+           - Model trains on historical data (month before now)
+           - Pairs: (features on day X) -> (label from price day X+1)
+           - Label from future price: up -> BUY, down -> SELL
+
+        2. DECISION MAKING:
+           - Model decides on current data
+           - Position opened (BUY) or closed (SELL)
+           - Result unknown until position closed
+
+        3. RETRAIN ON REAL DATA:
+           - Only COMPLETED trades (BUY -> SELL pairs)
+           - PnL known only after position closed (SELL)
+           - Only trades older than 1 day (avoid "fresh" data)
+           - Features from decision at position open (BUY)
+           - Label from result: PnL > 0 -> decision was correct
+
         4. FALLBACK:
-           - Если реальных данных недостаточно → переобучение на исторических данных
-           - Исторические данные всегда доступны (месяц до текущего момента)
+           - If not enough real data -> retrain on historical
+           - Historical data always available (month before now)
         """
         if not self.enable_ai:
             return
         
         try:
-            # Пробуем получить данные из БД через Django ORM
-            # Это работает только если вызывается из Django контекста
+            # Try to get data from DB via Django ORM
+            # Works only when called from Django context
             try:
                 from django.contrib.auth import get_user_model
                 from trading.models import TradingDecision, Trade, Position
@@ -880,8 +880,8 @@ class DecisionMakingAgent:
                 from datetime import timedelta
                 from django.utils import timezone as tz
                 
-                # Получаем пользователя из контекста (если доступен)
-                # Если нет - используем исторические данные
+                # Get user from context (if available)
+                # Otherwise use historical data
                 user = getattr(self, '_django_user', None)
                 
                 if not user and self.user_id:
@@ -894,17 +894,17 @@ class DecisionMakingAgent:
                 if user:
                     logger.info("Collecting real trading data from database for retraining...")
                     
-                    # ВАЖНО: Используем только ЗАВЕРШЕННЫЕ сделки (SELL после BUY) с известным PnL
-                    # И только те, которые старше 1 дня (чтобы избежать обучения на "свежих" данных)
+                    # IMPORTANT: Only COMPLETED trades (SELL after BUY) with known PnL
+                    # And only those older than 1 day (avoid training on "fresh" data)
                     min_age = tz.now() - timedelta(days=1)
                     
-                    # Получаем все SELL сделки (закрытие позиций) с известным PnL
-                    # Это означает, что позиция была открыта (BUY) и закрыта (SELL)
+                    # Get all SELL trades (position close) with known PnL
+                    # Position was opened (BUY) and closed (SELL)
                     completed_trades = Trade.objects.filter(
                         user=user,
-                        action="SELL",  # Только закрывающие сделки
-                        pnl__isnull=False,  # Только с рассчитанным PnL
-                        executed_at__lt=min_age  # Только старые данные (старше 1 дня)
+                        action="SELL",  # Closing trades only
+                        pnl__isnull=False,  # Only with calculated PnL
+                        executed_at__lt=min_age  # Only older data (> 1 day)
                     ).select_related('symbol', 'position').order_by('-executed_at')[:self.retrain_min_samples * 2]
                     
                     logger.info(f"Found {completed_trades.count()} completed trades (SELL with PnL) for retraining")
@@ -912,24 +912,24 @@ class DecisionMakingAgent:
                     training_samples = []
                     
                     for sell_trade in completed_trades:
-                        # Находим соответствующую BUY сделку (открытие позиции)
-                        # Ищем решение, которое привело к открытию этой позиции
+                        # Find matching BUY trade (position open)
+                        # Find decision that led to this position open
                         position = sell_trade.position
                         
                         if not position:
-                            # Если позиция не связана, ищем по символу и времени
+                            # If position not linked, search by symbol and time
                             buy_trade = Trade.objects.filter(
                                 user=user,
                                 symbol=sell_trade.symbol,
                                 action="BUY",
                                 executed_at__lt=sell_trade.executed_at,
-                                executed_at__gte=sell_trade.executed_at - timedelta(days=7)  # BUY в течение недели до SELL
+                                executed_at__gte=sell_trade.executed_at - timedelta(days=7)  # BUY within week before SELL
                             ).order_by('-executed_at').first()
                             
                             if not buy_trade:
                                 continue
                             
-                            # Ищем решение, которое привело к BUY
+                            # Find decision that led to BUY
                             decision = TradingDecision.objects.filter(
                                 user=user,
                                 symbol=sell_trade.symbol,
@@ -938,7 +938,7 @@ class DecisionMakingAgent:
                                 created_at__gte=buy_trade.executed_at - timedelta(hours=1)
                             ).order_by('-created_at').first()
                         else:
-                            # Ищем решение, которое привело к открытию позиции
+                            # Find decision that led to position open
                             decision = TradingDecision.objects.filter(
                                 user=user,
                                 symbol=sell_trade.symbol,
@@ -950,21 +950,21 @@ class DecisionMakingAgent:
                         if not decision or not decision.market_data:
                             continue
                         
-                        trade = sell_trade  # Используем SELL сделку (закрытие позиции)
+                        trade = sell_trade  # Use SELL trade (position close)
                         
-                        # Извлекаем фичи из метаданных решения (на момент открытия позиции)
+                        # Extract features from decision metadata (at position open)
                         market_data_obj = decision.market_data
                         metadata = decision.metadata or {}
                         
                         features = []
                         
-                        # Price features (на момент принятия решения BUY)
+                        # Price features (at BUY decision time)
                         features.append(float(market_data_obj.price))
                         features.append(float(market_data_obj.volume or 0))
                         change_pct = float(market_data_obj.change_percent or 0)
                         features.append(change_pct)
                         
-                        # Technical indicators (из metadata решения)
+                        # Technical indicators (from decision metadata)
                         indicators = metadata.get("indicators", {})
                         features.append(float(indicators.get("sma10", 0.0)))
                         features.append(float(indicators.get("sma20", 0.0)))
@@ -987,21 +987,21 @@ class DecisionMakingAgent:
                         sma_cross = analysis.get("signals", {}).get("sma_cross", 0)
                         features.append(float(sma_cross))
                         
-                        # Определяем label на основе результата ЗАВЕРШЕННОЙ сделки
-                        # PnL известен, т.к. это SELL сделка (закрытие позиции)
+                        # Set label from COMPLETED trade result
+                        # PnL known because this is SELL trade (position close)
                         pnl = float(trade.pnl)
                         
-                        # Логика: если BUY привел к прибыли (PnL > 0) - решение было правильным
-                        # Если BUY привел к убытку (PnL < 0) - решение было неправильным
+                        # Logic: if BUY led to profit (PnL > 0) - decision was correct
+                        # If BUY led to loss (PnL < 0) - decision was wrong
                         if decision.decision == "BUY":
                             if pnl > 0:
-                                label = 2  # BUY было правильным решением
+                                label = 2  # BUY was correct
                             elif pnl < 0:
-                                label = 0  # SELL было бы лучше (противоположное действие)
+                                label = 0  # SELL would have been better
                             else:
-                                label = 1  # HOLD если PnL = 0
+                                label = 1  # HOLD if PnL = 0
                         else:
-                            # Если решение было SELL (что маловероятно для открытия позиции)
+                            # If decision was SELL (unlikely for position open)
                             label_map = {"BUY": 2, "SELL": 0, "HOLD": 1}
                             label = label_map.get(decision.decision, 1)
                         
@@ -1016,32 +1016,32 @@ class DecisionMakingAgent:
                     if len(training_samples) >= self.retrain_min_samples:
                         logger.info(f"Collected {len(training_samples)} real trading samples for retraining")
                         
-                        # Объединяем с историческими данными
+                        # Combine with historical data
                         X_new = np.array([s[0] for s in training_samples])
                         y_new = np.array([s[1] for s in training_samples])
                         
-                        # Получаем старые данные (исторические)
+                        # Get old (historical) data
                         X_hist, y_hist = self._prepare_historical_training_data()
                         
                         if X_hist is not None and len(X_hist) > 0:
-                            # Объединяем старые и новые данные
+                            # Combine old and new data
                             X_combined = np.vstack([X_hist, X_new])
                             y_combined = np.hstack([y_hist, y_new])
                             logger.info(f"Combined training data: {len(X_hist)} historical + {len(X_new)} real = {len(X_combined)} total")
                         else:
-                            # Используем только новые данные
+                            # Use only new data
                             X_combined = X_new
                             y_combined = y_new
                             logger.info(f"Using only real trading data: {len(X_combined)} samples")
                         
-                        # Переобучаем модель
+                        # Retrain model
                         self._retrain_model(X_combined, y_combined)
                         from datetime import datetime
                         self.last_retrain_time = datetime.now()
                         logger.info("Model retrained successfully with real trading data")
                     else:
                         logger.debug(f"Not enough real trading samples ({len(training_samples)} < {self.retrain_min_samples})")
-                        # Если реальных данных недостаточно, переобучаем на исторических данных
+                        # If not enough real data, retrain on historical
                         logger.info("Retraining on historical data instead (not enough real trading samples)")
                         X_hist, y_hist = self._prepare_historical_training_data()
                         if X_hist is not None and len(X_hist) >= 50:
@@ -1054,7 +1054,7 @@ class DecisionMakingAgent:
                         return
                         
                 else:
-                    # Нет доступа к Django контексту - используем только исторические данные
+                    # No Django context - use historical data only
                     logger.info("No Django user context, retraining on historical data only")
                     X, y = self._prepare_historical_training_data()
                     if X is not None and len(X) >= self.retrain_min_samples:
@@ -1066,7 +1066,7 @@ class DecisionMakingAgent:
                         return
                         
             except ImportError:
-                # Django не доступен - используем только исторические данные
+                # Django not available - use historical data only
                 logger.info("Django not available, retraining on historical data only")
                 X, y = self._prepare_historical_training_data()
                 if X is not None and len(X) >= self.retrain_min_samples:
@@ -1078,25 +1078,25 @@ class DecisionMakingAgent:
                     
         except Exception as e:
             logger.error(f"Error in continuous learning retrain: {e}", exc_info=True)
-            # Не прерываем работу, просто логируем ошибку
+            # Don't interrupt, just log error
     
     def _retrain_model(self, X: np.ndarray, y: np.ndarray):
         """
-        Переобучает модель на новых данных.
+        Retrain model on new data.
         
         Args:
-            X: Массив фичей
-            y: Массив меток
+            X: Feature array
+            y: Label array
         """
         if not self.enable_ai or self.scaler is None:
             return
         
         logger.info(f"Retraining model on {len(X)} samples...")
         
-        # Разделяем данные
+        # Split data
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
-        # Переобучаем scaler на всех данных
+        # Retrain scaler on all data
         self.scaler.fit(X_train)
         X_train_scaled = self.scaler.transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
@@ -1107,7 +1107,7 @@ class DecisionMakingAgent:
                 n_estimators=100, 
                 random_state=42, 
                 max_depth=10,
-                class_weight='balanced'  # Балансировка классов
+                class_weight='balanced'  # Class balance
             )
         elif self.model_type == "gradient_boosting":
             self.model = GradientBoostingClassifier(
@@ -1125,13 +1125,13 @@ class DecisionMakingAgent:
         
         self.model.fit(X_train_scaled, y_train)
         
-        # Оцениваем
+        # Evaluate
         train_score = self.model.score(X_train_scaled, y_train)
         test_score = self.model.score(X_test_scaled, y_test)
         
         logger.info(f"Model retrained. Train accuracy: {train_score:.3f}, Test accuracy: {test_score:.3f}")
         
-        # Сохраняем модель если путь указан
+        # Save model if path provided
         if self.model_path:
             self._save_model(self.model_path)
     

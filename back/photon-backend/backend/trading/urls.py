@@ -58,7 +58,7 @@ urlpatterns = [
     path("dashboard/market-chart/", MarketChartView.as_view(), name="market-chart"),
     path("dashboard/market-heatmap/", MarketHeatmapView.as_view(), name="market-heatmap"),
     path("demo/orders/", DemoOrderView.as_view(), name="demo-orders"),
-    # Новые эндпоинты для мета-модели
+    # Meta-model endpoints
     path("meta-model/trade/", MetaModelAgentView.as_view(), name="meta-model-trade"),
     path("meta-model/backtest/", MetaModelBacktestView.as_view(), name="meta-model-backtest"),
     path("meta-model/chart-data/", TradingChartDataView.as_view(), name="trading-chart-data"),

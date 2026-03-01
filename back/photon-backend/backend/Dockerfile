@@ -2,19 +2,19 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Установка системных зависимостей
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Копирование requirements и установка зависимостей
+# Copy requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копирование кода приложения
+# Copy application code
 COPY . .
 
-# Создание директории для статики
+# Create static files directory
 RUN mkdir -p /app/staticfiles
 
 EXPOSE 8000

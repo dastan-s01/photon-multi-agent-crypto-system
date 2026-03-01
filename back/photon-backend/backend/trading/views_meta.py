@@ -1,5 +1,5 @@
 """
-Новые эндпоинты для мета-модели с фильтром активов
+Meta-model endpoints with asset filter
 """
 import logging
 import traceback
@@ -28,17 +28,17 @@ logger = logging.getLogger(__name__)
 
 
 class MetaModelAgentView(APIView):
-    """Эндпоинт для работы с мета-моделью (один агент - полный pipeline)"""
+    """Endpoint for meta-model (single agent - full pipeline)"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         """
-        Запускает полный pipeline: Market Monitoring → Decision Making → Execution
-        
+        Runs full pipeline: Market Monitoring -> Decision Making -> Execution
+
         Body:
         {
-            "symbol": "BTCUSDT",  # Обязательно
-            "execute": true/false  # Выполнять ли сделку (по умолчанию false)
+            "symbol": "BTCUSDT",  # Required
+            "execute": true/false  # Execute trade (default false)
         }
         """
         try:
@@ -51,7 +51,7 @@ class MetaModelAgentView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Проверяем фильтр активов
+            # Check asset filter
             asset_filter = get_asset_filter()
             if not asset_filter.is_approved(symbol_code):
                 return Response(
@@ -63,14 +63,14 @@ class MetaModelAgentView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Получаем или создаем символ
+            # Get or create symbol
             symbol, _ = Symbol.objects.get_or_create(
                 user=request.user,
                 symbol=symbol_code,
                 defaults={"name": symbol_code, "is_active": True}
             )
             
-            # Получаем данные рынка
+            # Get market data
             binance_service = BinanceAPIService()
             historical_data = binance_service.get_historical_data(
                 symbol=symbol_code,
@@ -84,7 +84,7 @@ class MetaModelAgentView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Конвертируем в DataFrame
+            # Convert to DataFrame
             df_data = []
             for candle in historical_data:
                 df_data.append({
@@ -115,10 +115,10 @@ class MetaModelAgentView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Мета-модель для принятия решения
+            # Meta-model for decision
             meta_selector = MetaModelSelector()
             
-            # Подготавливаем данные для обучения (используем все доступные данные)
+            # Prepare training data (use all available)
             X, y = self._prepare_training_data(preprocessed_data)
             
             if X is None or len(X) < 20:
@@ -127,26 +127,26 @@ class MetaModelAgentView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Обучаем модели
+            # Train models
             meta_selector.train_base_models(symbol_code, X, y)
             
-            # Получаем последнюю свечу для предсказания
+            # Get latest candle for prediction
             last_row = preprocessed_data.iloc[-1]
             prev_row = preprocessed_data.iloc[-2] if len(preprocessed_data) > 1 else None
             
-            # Извлекаем фичи
+            # Extract features
             features = self._extract_features(last_row, prev_row)
             
-            # Предсказание через мета-модель
+            # Prediction via meta-model
             prediction, confidence, regime = meta_selector.predict_ensemble_with_regime(
                 symbol_code, features, preprocessed_data
             )
             
-            # Конвертируем предсказание в действие
+            # Convert prediction to action
             action_map = {0: "SELL", 1: "HOLD", 2: "BUY"}
             action = action_map.get(prediction, "HOLD")
             
-            # Сохраняем решение
+            # Save decision
             latest_market_data = MarketData.objects.filter(symbol=symbol).order_by("-timestamp").first()
             
             decision = TradingDecision.objects.create(
@@ -181,7 +181,7 @@ class MetaModelAgentView(APIView):
                 }
             }
             
-            # Если нужно выполнить сделку
+            # If trade execution needed
             if execute and action != "HOLD":
                 execution_result = self._execute_trade(request.user, symbol, decision, action, float(last_row.get('close', 0.0)))
                 result["execution"] = execution_result
@@ -196,7 +196,7 @@ class MetaModelAgentView(APIView):
             )
     
     def _prepare_training_data(self, data: pd.DataFrame) -> tuple:
-        """Подготавливает данные для обучения"""
+        """Prepare training data"""
         if len(data) < 200:
             return None, None
         
@@ -251,7 +251,7 @@ class MetaModelAgentView(APIView):
                     sma_cross = 1.0
             features.append(sma_cross)
             
-            # Генерация метки
+            # Generate label
             current_price = current_row.get('close', 0.0)
             if current_price > 0 and i + lookahead_periods < len(data):
                 future_row = data.iloc[i + lookahead_periods]
@@ -279,7 +279,7 @@ class MetaModelAgentView(APIView):
         return np.array(X), np.array(y)
     
     def _extract_features(self, row: pd.Series, prev_row: pd.Series = None) -> np.ndarray:
-        """Извлекает фичи из строки данных"""
+        """Extract features from data row"""
         features = []
         features.append(float(row.get('close', 0.0)))
         features.append(float(row.get('volume', 0.0)))
@@ -325,7 +325,7 @@ class MetaModelAgentView(APIView):
         return np.array(features).reshape(1, -1)
     
     def _execute_trade(self, user, symbol: Symbol, decision: TradingDecision, action: str, price: float):
-        """Выполняет сделку"""
+        """Execute trade"""
         try:
             account, _ = Account.objects.get_or_create(
                 user=user,
@@ -337,15 +337,15 @@ class MetaModelAgentView(APIView):
             )
             
             if action == "BUY":
-                # Проверяем баланс
+                # Check balance
                 if account.free_cash <= 0:
                     return {"status": "failed", "reason": "Insufficient balance"}
                 
-                # Используем 90% доступного баланса
+                # Use 90% of available balance
                 trade_amount = account.free_cash * Decimal("0.9")
                 quantity = trade_amount / Decimal(str(price))
                 
-                # Создаем позицию
+                # Create position
                 position = Position.objects.create(
                     user=user,
                     symbol=symbol,
@@ -355,11 +355,11 @@ class MetaModelAgentView(APIView):
                     side="LONG"
                 )
                 
-                # Обновляем баланс
+                # Update balance
                 account.free_cash -= trade_amount
                 account.save()
                 
-                # Создаем сделку
+                # Create trade
                 trade = Trade.objects.create(
                     user=user,
                     symbol=symbol,
@@ -380,7 +380,7 @@ class MetaModelAgentView(APIView):
                 }
             
             elif action == "SELL":
-                # Ищем открытую позицию
+                # Find open position
                 position = Position.objects.filter(
                     user=user,
                     symbol=symbol,
@@ -390,12 +390,12 @@ class MetaModelAgentView(APIView):
                 if not position:
                     return {"status": "failed", "reason": "No open position"}
                 
-                # Закрываем позицию
+                # Close position
                 sell_amount = position.quantity * Decimal(str(price))
                 account.free_cash += sell_amount
                 account.save()
                 
-                # Создаем сделку
+                # Create trade
                 trade = Trade.objects.create(
                     user=user,
                     symbol=symbol,
@@ -406,7 +406,7 @@ class MetaModelAgentView(APIView):
                     executed_at=timezone.now()
                 )
                 
-                # Закрываем позицию
+                # Close position
                 position.is_open = False
                 position.exit_price = Decimal(str(price))
                 position.exit_time = timezone.now()
@@ -429,16 +429,16 @@ class MetaModelAgentView(APIView):
 
 
 class TradingChartDataView(APIView):
-    """Эндпоинт для получения данных графика (покупки/продажи)"""
+    """Endpoint for chart data (trades)"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """
-        Возвращает данные для графика торговли
-        
+        Returns trading chart data.
+
         Query params:
-        - symbol: код криптовалюты (обязательно)
-        - days: количество дней истории (по умолчанию 30)
+        - symbol: crypto symbol (required)
+        - days: history days (default 30)
         """
         try:
             symbol_code = request.query_params.get("symbol", "").upper()
@@ -450,7 +450,7 @@ class TradingChartDataView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Получаем символ
+            # Get symbol
             try:
                 symbol = Symbol.objects.get(user=request.user, symbol=symbol_code)
             except Symbol.DoesNotExist:
@@ -459,7 +459,7 @@ class TradingChartDataView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Получаем исторические данные рынка
+            # Get historical market data
             binance_service = BinanceAPIService()
             historical_data = binance_service.get_historical_data(
                 symbol=symbol_code,
@@ -473,7 +473,7 @@ class TradingChartDataView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Формируем данные свечей
+            # Build candle data
             candles = []
             for candle in historical_data:
                 candles.append({
@@ -485,7 +485,7 @@ class TradingChartDataView(APIView):
                     "volume": float(candle["volume"]),
                 })
             
-            # Получаем сделки пользователя
+            # Get user trades
             since = timezone.now() - timedelta(days=days)
             trades = Trade.objects.filter(
                 user=request.user,
@@ -493,7 +493,7 @@ class TradingChartDataView(APIView):
                 executed_at__gte=since
             ).order_by("executed_at")
             
-            # Формируем данные о сделках
+            # Build trade markers
             trade_markers = []
             for trade in trades:
                 trade_markers.append({
@@ -506,7 +506,7 @@ class TradingChartDataView(APIView):
                     "confidence": float(trade.decision.confidence) if trade.decision else None,
                 })
             
-            # Получаем решения (включая HOLD)
+            # Get decisions (including HOLD)
             decisions = TradingDecision.objects.filter(
                 user=request.user,
                 symbol=symbol,
@@ -545,11 +545,11 @@ class TradingChartDataView(APIView):
 
 
 class ApprovedAssetsView(APIView):
-    """Эндпоинт для получения списка одобренных активов"""
+    """Endpoint for approved assets list"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Возвращает список одобренных и заблокированных активов"""
+        """Returns approved and blacklisted assets"""
         asset_filter = get_asset_filter()
         
         approved = []
@@ -583,21 +583,21 @@ class ApprovedAssetsView(APIView):
 
 
 class MetaModelBacktestView(APIView):
-    """Эндпоинт для walk-forward бэктеста мета-модели"""
+    """Endpoint for walk-forward meta-model backtest"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         """
-        Запускает walk-forward бэктест мета-модели
-        
+        Runs walk-forward meta-model backtest.
+
         Body:
         {
-            "symbol": "SOLUSDT",  # Обязательно
-            "initial_balance": 10000.0,  # По умолчанию 10000
-            "train_window": 200,  # Размер окна обучения (по умолчанию 200)
-            "retrain_interval": 50,  # Интервал переобучения (по умолчанию 50)
-            "use_ensemble": true,  # Использовать ансамбль (по умолчанию true)
-            "use_regime_switching": true  # Использовать режим-свитчинг (по умолчанию true)
+            "symbol": "SOLUSDT",  # Required
+            "initial_balance": 10000.0,  # Default 10000
+            "train_window": 200,  # Training window (default 200)
+            "retrain_interval": 50,  # Retrain interval (default 50)
+            "use_ensemble": true,  # Use ensemble (default true)
+            "use_regime_switching": true  # Regime switching (default true)
         }
         """
         logger.info(f"MetaModelBacktestView POST request received. Data: {request.data}")
@@ -616,7 +616,7 @@ class MetaModelBacktestView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Получаем исторические данные (14 дней для оптимизации)
+            # Get historical data (14 days for optimization)
             binance_service = BinanceAPIService()
             historical_data = binance_service.get_historical_data(
                 symbol=symbol_code,
@@ -630,7 +630,7 @@ class MetaModelBacktestView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Конвертируем в DataFrame
+            # Convert to DataFrame
             df_data = []
             for candle in historical_data:
                 df_data.append({
@@ -644,7 +644,7 @@ class MetaModelBacktestView(APIView):
             df = pd.DataFrame(df_data)
             df.index = [candle["timestamp"] for candle in historical_data]
             
-            # Market Monitoring Agent для обработки данных
+            # Market Monitoring Agent for data processing
             market_agent = MarketMonitoringAgent(
                 ticker=symbol_code,
                 interval="1h",
@@ -661,7 +661,7 @@ class MetaModelBacktestView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Выполняем walk-forward бэктест
+            # Run walk-forward backtest
             result = self._run_walk_forward_backtest(
                 preprocessed_data,
                 symbol_code,
@@ -691,7 +691,7 @@ class MetaModelBacktestView(APIView):
             )
     
     def _prepare_training_data(self, data: pd.DataFrame, end_idx: int) -> tuple:
-        """Подготавливает данные для обучения до указанного индекса"""
+        """Prepare training data up to given index"""
         if end_idx < 200:
             return None, None
         
@@ -749,7 +749,7 @@ class MetaModelBacktestView(APIView):
                     sma_cross = 1.0
             features.append(sma_cross)
             
-            # Генерация метки
+            # Generate label
             current_price = current_row.get('close', 0.0)
             if current_price > 0 and i + lookahead_periods < end_idx:
                 future_row = data.iloc[i + lookahead_periods]
@@ -777,7 +777,7 @@ class MetaModelBacktestView(APIView):
         return np.array(X), np.array(y)
     
     def _extract_features(self, row: pd.Series, prev_row: pd.Series = None) -> np.ndarray:
-        """Извлекает фичи из строки данных"""
+        """Extract features from data row"""
         features = []
         features.append(float(row.get('close', 0.0)))
         features.append(float(row.get('volume', 0.0)))
@@ -826,7 +826,7 @@ class MetaModelBacktestView(APIView):
                                    initial_balance: float, train_window: int,
                                    retrain_interval: int, use_ensemble: bool,
                                    use_regime_switching: bool) -> dict:
-        """Выполняет walk-forward бэктест"""
+        """Run walk-forward backtest"""
         balance = initial_balance
         position = None  # {quantity: float, entry_price: float}
         trades = []
@@ -838,7 +838,7 @@ class MetaModelBacktestView(APIView):
         total_records = len(data)
         last_retrain_idx = train_window
         
-        # Обучаем модели перед началом бэктеста
+        # Train models before backtest start
         X, y = self._prepare_training_data(data, train_window)
         if X is None or len(X) < 20:
             return {
@@ -851,7 +851,7 @@ class MetaModelBacktestView(APIView):
         logger.info(f"Initial training completed for {symbol}. Trained models: {trained_models}")
         
         for i in range(train_window, total_records):
-            # Переобучение моделей
+            # Retrain models
             if i >= last_retrain_idx:
                 X, y = self._prepare_training_data(data, i)
                 if X is not None and len(X) >= 20:
@@ -860,18 +860,18 @@ class MetaModelBacktestView(APIView):
                     logger.debug(f"[{i}/{total_records}] Retrained models for {symbol}. Models: {trained_models}")
                     last_retrain_idx = i + retrain_interval
             
-            # Проверяем, что модели обучены
+            # Ensure models are trained
             if symbol not in meta_selector.base_models or not meta_selector.base_models[symbol]:
                 continue
             
-            # Получаем текущую строку данных
+            # Get current data row
             current_row = data.iloc[i]
             prev_row = data.iloc[i - 1] if i > 0 else None
             
-            # Извлекаем фичи
+            # Extract features
             features = self._extract_features(current_row, prev_row)
             
-            # Получаем предсказание
+            # Get prediction
             prediction = None
             confidence = 0.0
             regime = 'flat'
@@ -885,7 +885,7 @@ class MetaModelBacktestView(APIView):
                 else:
                     continue
             else:
-                # Используем только первую модель
+                # Use only first model
                 model_name = list(meta_selector.base_models[symbol].keys())[0]
                 model = meta_selector.base_models[symbol][model_name]
                 if symbol in meta_selector.scalers:
@@ -909,9 +909,9 @@ class MetaModelBacktestView(APIView):
             action = action_map.get(prediction, "HOLD")
             current_price = float(current_row.get('close', 0.0))
             
-            # Выполняем торговую логику
+            # Execute trading logic
             if action == "BUY" and position is None:
-                # Покупаем
+                # Buy
                 trade_amount = balance * 0.9
                 quantity = trade_amount / current_price
                 position = {
@@ -928,7 +928,7 @@ class MetaModelBacktestView(APIView):
                 })
             
             elif action == "SELL" and position is not None:
-                # Продаем
+                # Sell
                 sell_amount = position['quantity'] * current_price
                 balance += sell_amount
                 pnl = sell_amount - (position['quantity'] * position['entry_price'])
@@ -945,7 +945,7 @@ class MetaModelBacktestView(APIView):
                 })
                 position = None
         
-        # Закрываем открытую позицию в конце
+        # Close open position at end
         if position is not None:
             last_price = float(data.iloc[-1].get('close', 0.0))
             sell_amount = position['quantity'] * last_price
@@ -964,17 +964,17 @@ class MetaModelBacktestView(APIView):
                 'is_closing': True
             })
         
-        # Подсчитываем статистику
+        # Compute statistics
         total_return = ((balance - initial_balance) / initial_balance) * 100
         
-        # Подсчитываем прибыльные и убыточные сделки
+        # Count profitable and losing trades
         profitable_trades = 0
         losing_trades = 0
         
         i = 0
         while i < len(trades):
             if trades[i]['action'] == 'BUY':
-                # Ищем соответствующую SELL сделку
+                # Find matching SELL trade
                 j = i + 1
                 while j < len(trades) and trades[j]['action'] != 'SELL':
                     j += 1
@@ -993,7 +993,7 @@ class MetaModelBacktestView(APIView):
         total_trades = profitable_trades + losing_trades
         win_rate = (profitable_trades / total_trades * 100) if total_trades > 0 else 0
         
-        # Получаем список обученных моделей
+        # Get list of trained models
         trained_models = list(meta_selector.base_models.get(symbol, {}).keys())
         
         return {

@@ -1,5 +1,5 @@
 """
-Celery задачи для торговой системы
+Celery tasks for trading system
 """
 import logging
 from datetime import datetime
@@ -15,13 +15,13 @@ from trading.services import get_market_data_service
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
-# Хранилище для активных задач мониторинга
+# Active monitoring tasks storage
 _active_monitoring_tasks = {}
 
 
 @shared_task
 def start_market_monitoring(user_id: int):
-    """Запускает периодический мониторинг рынка для пользователя"""
+    """Start periodic market monitoring for user"""
     try:
         user = User.objects.get(id=user_id)
         symbols = Symbol.objects.filter(user=user, is_active=True)
@@ -30,7 +30,7 @@ def start_market_monitoring(user_id: int):
             logger.warning(f"No active symbols for user {user_id}")
             return
 
-        # Обновляем данные для всех символов
+        # Update data for all symbols
         market_service = get_market_data_service()
         updated_count = 0
         for symbol in symbols:
@@ -56,7 +56,7 @@ def start_market_monitoring(user_id: int):
         logger.error(f"User {user_id} not found")
     except Exception as e:
         logger.error(f"Error in market monitoring: {str(e)}", exc_info=True)
-        # Обновляем статус на ошибку
+        # Update status to error
         try:
             user = User.objects.get(id=user_id)
             status_obj, _ = AgentStatus.objects.get_or_create(
@@ -74,20 +74,20 @@ def start_market_monitoring(user_id: int):
 @shared_task
 def periodic_market_update():
     """
-    Периодическая задача для обновления данных рынка (запускается по расписанию)
-    Обновляет данные для ВСЕХ активных символов, независимо от статуса агента
+    Periodic task for market data update (runs on schedule).
+    Updates ALL active symbols regardless of agent status.
     """
     from trading.models import Symbol
 
-    # Получаем уникальных пользователей, у которых есть активные символы
+    # Get users with active symbols
     user_ids = Symbol.objects.filter(is_active=True).values_list("user_id", flat=True).distinct()
 
     total_updated = 0
     for user_id in user_ids:
         try:
             user = User.objects.get(id=user_id)
-            # Обновляем данные для всех активных символов пользователя
-            # НЕ проверяем статус агента - данные должны обновляться всегда!
+            # Update data for all user active symbols
+            # Do NOT check agent status - data should always update
             market_service = get_market_data_service()
             user_symbols = Symbol.objects.filter(user=user, is_active=True)
             user_updated = 0
@@ -102,16 +102,16 @@ def periodic_market_update():
                 except Exception as e:
                     logger.error(f"Error updating data for symbol {sym.symbol}: {str(e)}", exc_info=True)
 
-            # Обновляем статус агента (если существует) для отслеживания активности
+            # Update agent status (if exists) for activity tracking
             try:
                 status_obj = AgentStatus.objects.get(user=user, agent_type="MARKET_MONITOR")
-                # Если статус был RUNNING, обновляем last_activity
+                # If status was RUNNING, update last_activity
                 if status_obj.status == "RUNNING":
                     status_obj.last_activity = timezone.now()
                     status_obj.save()
             except AgentStatus.DoesNotExist:
-                # Если агент не существует, создаем его со статусом IDLE
-                # Это означает, что данные обновляются автоматически, но агент не был явно запущен
+                # If agent doesn't exist, create with IDLE status
+                # Data updates automatically but agent wasn't explicitly started
                 AgentStatus.objects.create(
                     user=user,
                     agent_type="MARKET_MONITOR",
@@ -131,7 +131,7 @@ def periodic_market_update():
 
 
 def stop_market_monitoring(user_id: int):
-    """Останавливает мониторинг для пользователя"""
+    """Stop monitoring for user"""
     try:
         user = User.objects.get(id=user_id)
         status_obj = AgentStatus.objects.get(user=user, agent_type="MARKET_MONITOR")
@@ -145,14 +145,14 @@ def stop_market_monitoring(user_id: int):
 @shared_task
 def run_ai_agents_workflow():
     """
-    Автоматический запуск workflow ИИ агентов каждую минуту.
-    
-    Выполняет полный цикл:
-    1. MarketMonitoringAgent - получение данных рынка
-    2. DecisionMakingAgent - принятие решения
-    3. ExecutionAgent - выполнение сделки (если не HOLD)
-    
-    Запускается для всех пользователей со статусом "running" в UserSettings.
+    Auto-run AI agents workflow every minute.
+
+    Full cycle:
+    1. MarketMonitoringAgent - get market data
+    2. DecisionMakingAgent - make decision
+    3. ExecutionAgent - execute trade (if not HOLD)
+
+    Runs for all users with status "running" in UserSettings.
     """
     from trading.models import UserSettings, Symbol, Trade
     from trading.agents import MarketMonitoringAgent, DecisionMakingAgent, ExecutionAgent
@@ -163,7 +163,7 @@ def run_ai_agents_workflow():
     )
     from django.utils import timezone as tz
     
-    # Получаем всех пользователей с активной торговлей
+    # Get all users with active trading
     active_users = UserSettings.objects.filter(status="running").select_related("user")
     
     if not active_users.exists():
@@ -178,7 +178,7 @@ def run_ai_agents_workflow():
         user = user_settings.user
         
         try:
-            # Получаем активный символ пользователя
+            # Get user active symbol
             symbol_obj = Symbol.objects.filter(
                 user=user,
                 symbol=user_settings.symbol,
@@ -189,7 +189,7 @@ def run_ai_agents_workflow():
                 logger.warning(f"No active symbol {user_settings.symbol} for user {user.id}")
                 continue
             
-            # Шаг 1: MarketMonitoringAgent
+            # Step 1: MarketMonitoringAgent
             try:
                 market_integration = MarketAgentIntegration(user)
                 market_agent = MarketMonitoringAgent(
@@ -208,7 +208,7 @@ def run_ai_agents_workflow():
                     save_to_db=True
                 )
                 
-                # Получаем последние данные из БД
+                # Get latest data from DB
                 from trading.models import MarketData
                 latest_data = MarketData.objects.filter(
                     symbol=symbol_obj
@@ -222,30 +222,30 @@ def run_ai_agents_workflow():
                 logger.error(f"Error in MarketMonitoringAgent for user {user.id}: {e}", exc_info=True)
                 continue
             
-            # Шаг 2: DecisionMakingAgent
+            # Step 2: DecisionMakingAgent
             try:
                 decision_integration = DecisionAgentIntegration(user)
                 
-                # Проверяем, сколько завершенных сделок у пользователя (для exploration режима)
+                # Check completed trades count (for exploration mode)
                 completed_trades_count = Trade.objects.filter(
                     user=user,
                     action="SELL",
                     pnl__isnull=False
                 ).count()
                 
-                # Exploration режим: если данных для обучения мало, снижаем порог уверенности
-                enable_exploration = completed_trades_count < 10  # Меньше 10 завершенных сделок
+                # Exploration mode: lower confidence threshold if few training data
+                enable_exploration = completed_trades_count < 10  # Fewer than 10 completed trades
                 exploration_confidence = 0.35 if enable_exploration else float(user_settings.confidence_threshold)
                 
                 decision_agent = DecisionMakingAgent(
                     model_type="random_forest" if user_settings.model_type == "Random Forest" else "gradient_boosting",
                     risk_tolerance=user_settings.risk_level,
-                    min_confidence=exploration_confidence,  # Сниженный порог в exploration режиме
+                    min_confidence=exploration_confidence,  # Lower threshold in exploration mode
                     enable_ai=True,
                     use_historical_training=True,
                     training_ticker=user_settings.symbol,
                     training_period="1mo",
-                    user_id=user.id  # Для доступа к БД для обучения
+                    user_id=user.id  # For DB access during training
                 )
                 
                 decision = decision_integration.make_decision(
@@ -265,7 +265,7 @@ def run_ai_agents_workflow():
                 logger.error(f"Error in DecisionMakingAgent for user {user.id}: {e}", exc_info=True)
                 continue
             
-            # Шаг 3: ExecutionAgent (если не HOLD)
+            # Step 3: ExecutionAgent (if not HOLD)
             if decision_action != "HOLD":
                 try:
                     execution_integration = ExecutionAgentIntegration(user)

@@ -72,7 +72,7 @@ def health(_request):
 
 
 def api_root(_request):
-    """Корневой эндпоинт API"""
+    """Root API endpoint"""
     return JsonResponse(
         {
             "name": "Photon Trading API",
