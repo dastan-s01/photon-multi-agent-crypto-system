@@ -6,9 +6,9 @@ Multi-agent automated trading system for crypto and stock markets. Three AI agen
 
 ```
 photon/
-├── back/    # Django backend
+├── back/
+│   └── backend/   # Django backend
 ├── front/   # Next.js frontend
-├── ml/      # ML models (placeholder)
 └── README.md
 ```
 
@@ -29,7 +29,7 @@ photon/
 ### Backend
 
 ```bash
-cd back/photon-backend
+cd back
 cp backend/env.example backend/.env
 docker compose up --build
 ```

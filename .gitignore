@@ -3,3 +3,7 @@
 .env
 .env.local
 .env*.local
+.idea/
+__pycache__/
+*.pyc
+node_modules/

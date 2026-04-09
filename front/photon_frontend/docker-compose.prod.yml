@@ -1,0 +1,25 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        # Client (browser) — localhost resolves on user machine
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:666/api}
+    container_name: photon-frontend
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      # Next.js server (SSR) — from container to backend via host.docker.internal
+      - API_URL_SERVER=http://host.docker.internal:666/api
+    networks:
+      - photon-network
+
+networks:
+  photon-network:
+    driver: bridge

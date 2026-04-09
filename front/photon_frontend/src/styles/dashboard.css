@@ -1,0 +1,346 @@
+/* Dashboard Design System - Dark Black Theme */
+/* Based on bizdin-audio design but with black color scheme instead of purple */
+/* Styles are scoped to .dashboard-layout to not affect landing page */
+
+.dashboard-layout {
+  /* Dark black color palette */
+  --dashboard-background: #0a0a0a;
+  --dashboard-background-light: #151515;
+  --dashboard-background-card: rgba(20, 20, 20, 0.85);
+  --dashboard-background-secondary: #1a1a1a;
+  
+  --dashboard-primary: #ffffff;
+  --dashboard-primary-dark: #0a0a0a;
+  --dashboard-accent: #2a2a2a;
+  
+  /* Accent colors */
+  --dashboard-accent-primary: #3b82f6;
+  --dashboard-accent-secondary: #8b5cf6;
+  
+  --dashboard-white: #ffffff;
+  --dashboard-white-50: rgba(255, 255, 255, 0.5);
+  --dashboard-white-10: rgba(255, 255, 255, 0.1);
+  --dashboard-white-5: rgba(255, 255, 255, 0.05);
+  
+  --dashboard-text-primary: #ffffff;
+  --dashboard-text-secondary: #888888;
+  --dashboard-text-muted: rgba(255, 255, 255, 0.5);
+  
+  --dashboard-accent-avatar: #1a1a1a;
+  
+  /* Financial colors */
+  --dashboard-profit: #22c55e;
+  --dashboard-loss: #ef4444;
+  
+  /* Sidebar sizes */
+  --dashboard-sidebar-width: 280px;
+  --dashboard-sidebar-collapsed: 6.75rem;
+  
+  /* Gradients */
+  --dashboard-gradient-primary: linear-gradient(90deg, #0a0a0a, rgba(10, 10, 10, 0));
+  --dashboard-gradient-card: linear-gradient(180deg, rgba(20, 20, 20, 0.85), rgba(20, 20, 20, 0.85));
+  --dashboard-gradient-active: linear-gradient(90deg, #1a1a1a, rgba(26, 26, 26, 0));
+  
+  /* Shadows */
+  --dashboard-shadow-card: 0px 10px 20px rgba(0, 0, 0, 0.5);
+  --dashboard-shadow-inset: 15px 15px 50px rgba(255, 255, 255, 0.05) inset;
+  
+  /* Border radius */
+  --dashboard-radius-sm: 10px;
+  --dashboard-radius-md: 20px;
+  --dashboard-radius-lg: 30px;
+}
+
+/* Apply styles only to dashboard pages */
+.dashboard-layout {
+  background-color: var(--dashboard-background);
+  color: var(--dashboard-text-primary);
+  min-height: 100vh;
+}
+
+/* Override sidebar styles only within dashboard layout */
+.dashboard-layout [data-sidebar="sidebar"] {
+  background: var(--dashboard-background-light) !important;
+  border-right: 1px solid var(--dashboard-white-10) !important;
+  color: var(--dashboard-text-primary) !important;
+}
+
+.dashboard-layout [data-sidebar="sidebar"] [data-slot="sidebar-header"],
+.dashboard-layout [data-sidebar="sidebar"] [data-slot="sidebar-content"],
+.dashboard-layout [data-sidebar="sidebar"] [data-slot="sidebar-footer"] {
+  color: var(--dashboard-text-primary);
+}
+
+.dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"][data-active="true"],
+.dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"][data-active="true"] * {
+  background: transparent !important;
+  border-left: none !important;
+  color: var(--dashboard-text-primary) !important;
+}
+
+.dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"]:not([data-active="true"]),
+.dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"]:not([data-active="true"]) * {
+  color: var(--dashboard-text-secondary) !important;
+}
+
+.dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"]:not([data-active="true"]):hover,
+.dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"]:not([data-active="true"]):hover * {
+  background: var(--dashboard-white-10) !important;
+  color: var(--dashboard-text-primary) !important;
+}
+
+.dashboard-layout [data-sidebar="group-label"] {
+  color: var(--dashboard-text-secondary) !important;
+}
+
+.dashboard-layout [data-sidebar="trigger"] {
+  color: var(--dashboard-text-primary) !important;
+}
+
+.dashboard-layout [data-sidebar="trigger"]:hover {
+  background: var(--dashboard-white-10) !important;
+}
+
+/* Sidebar styles */
+.dashboard-sidebar {
+  background: var(--dashboard-background-light);
+  border-right: 1px solid var(--dashboard-white-10);
+  color: var(--dashboard-text-primary);
+}
+
+.dashboard-sidebar.collapsed {
+  width: var(--dashboard-sidebar-collapsed);
+}
+
+.dashboard-sidebar .sidebar-container {
+  background: var(--dashboard-background-light);
+  border-top-right-radius: var(--dashboard-radius-lg);
+  border-bottom-right-radius: var(--dashboard-radius-lg);
+  box-shadow: var(--dashboard-shadow-inset);
+  outline: 1px solid var(--dashboard-white-10);
+}
+
+.dashboard-sidebar .menu-item {
+  transition: all 0.2s ease;
+}
+
+.dashboard-sidebar .menu-item.active {
+  background: var(--dashboard-gradient-active);
+  border-left: 4px solid var(--dashboard-primary);
+}
+
+.dashboard-sidebar .menu-item:hover:not(.active) {
+  background: var(--dashboard-white-10);
+}
+
+/* Header styles */
+.dashboard-header {
+  background: var(--dashboard-background-card);
+  backdrop-filter: blur(50px);
+  border-bottom: 1px solid var(--dashboard-white-10);
+}
+
+/* Card styles */
+.dashboard-card {
+  background: var(--dashboard-gradient-card);
+  border: 1px solid var(--dashboard-white-10);
+  box-shadow: var(--dashboard-shadow-card);
+  backdrop-filter: blur(50px);
+}
+
+/* Searchbar styles */
+.dashboard-searchbar {
+  background: var(--dashboard-gradient-card);
+  border: 1px solid var(--dashboard-white-10);
+  backdrop-filter: blur(50px);
+  box-shadow: var(--dashboard-shadow-card);
+  color: var(--dashboard-text-secondary);
+}
+
+.dashboard-searchbar input::placeholder {
+  color: var(--dashboard-text-secondary);
+}
+
+/* Button styles */
+.dashboard-button {
+  background: transparent;
+  border: 1px solid var(--dashboard-white-10);
+  color: var(--dashboard-text-primary);
+  transition: all 0.2s ease;
+}
+
+.dashboard-button:hover {
+  background: var(--dashboard-white-10);
+}
+
+/* Dropdown styles */
+.dashboard-dropdown {
+  background: var(--dashboard-background-light);
+  border: 1px solid var(--dashboard-white-10);
+  box-shadow: var(--dashboard-shadow-card);
+}
+
+.dashboard-dropdown-item {
+  color: var(--dashboard-text-primary);
+}
+
+.dashboard-dropdown-item:hover {
+  background: var(--dashboard-background-secondary);
+}
+
+/* Avatar styles */
+.dashboard-avatar {
+  background: var(--dashboard-accent-avatar);
+  color: var(--dashboard-text-primary);
+}
+
+/* Light theme styles */
+html:not(.dark) .dashboard-layout {
+  /* Light color palette */
+  --dashboard-background: #ffffff;
+  --dashboard-background-light: #f8f9fa;
+  --dashboard-background-card: rgba(255, 255, 255, 0.95);
+  --dashboard-background-secondary: #f1f3f5;
+  
+  --dashboard-primary: #000000;
+  --dashboard-primary-dark: #ffffff;
+  --dashboard-accent: #e9ecef;
+  
+  /* Accent colors remain the same */
+  --dashboard-accent-primary: #3b82f6;
+  --dashboard-accent-secondary: #8b5cf6;
+  
+  --dashboard-white: #000000;
+  --dashboard-white-50: rgba(0, 0, 0, 0.5);
+  --dashboard-white-10: rgba(0, 0, 0, 0.1);
+  --dashboard-white-5: rgba(0, 0, 0, 0.05);
+  
+  --dashboard-text-primary: #000000;
+  --dashboard-text-secondary: #495057;
+  --dashboard-text-muted: rgba(0, 0, 0, 0.5);
+  
+  --dashboard-accent-avatar: #e9ecef;
+  
+  /* Financial colors remain the same */
+  --dashboard-profit: #22c55e;
+  --dashboard-loss: #ef4444;
+  
+  /* Gradients for light theme */
+  --dashboard-gradient-primary: linear-gradient(90deg, #ffffff, rgba(255, 255, 255, 0));
+  --dashboard-gradient-card: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95));
+  --dashboard-gradient-active: linear-gradient(90deg, #f1f3f5, rgba(241, 243, 245, 0));
+  
+  /* Shadows for light theme */
+  --dashboard-shadow-card: 0px 10px 20px rgba(0, 0, 0, 0.1);
+  --dashboard-shadow-inset: 15px 15px 50px rgba(0, 0, 0, 0.05) inset;
+}
+
+/* Light theme sidebar */
+html:not(.dark) .dashboard-layout [data-sidebar="sidebar"] {
+  background: var(--dashboard-background-light) !important;
+  border-right: 1px solid var(--dashboard-white-10) !important;
+  color: var(--dashboard-text-primary) !important;
+}
+
+html:not(.dark) .dashboard-layout [data-sidebar="sidebar"] [data-slot="sidebar-header"],
+html:not(.dark) .dashboard-layout [data-sidebar="sidebar"] [data-slot="sidebar-content"],
+html:not(.dark) .dashboard-layout [data-sidebar="sidebar"] [data-slot="sidebar-footer"] {
+  color: var(--dashboard-text-primary);
+}
+
+html:not(.dark) .dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"]:not([data-active="true"]),
+html:not(.dark) .dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"]:not([data-active="true"]) * {
+  color: var(--dashboard-text-secondary) !important;
+}
+
+html:not(.dark) .dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"]:not([data-active="true"]):hover,
+html:not(.dark) .dashboard-layout [data-sidebar="sidebar"] [data-sidebar="menu-button"]:not([data-active="true"]):hover * {
+  background: var(--dashboard-white-10) !important;
+  color: var(--dashboard-text-primary) !important;
+}
+
+html:not(.dark) .dashboard-layout [data-sidebar="group-label"] {
+  color: var(--dashboard-text-secondary) !important;
+}
+
+html:not(.dark) .dashboard-layout [data-sidebar="trigger"] {
+  color: var(--dashboard-text-primary) !important;
+}
+
+html:not(.dark) .dashboard-layout [data-sidebar="trigger"]:hover {
+  background: var(--dashboard-white-10) !important;
+}
+
+/* Light theme header */
+html:not(.dark) .dashboard-layout .dashboard-header {
+  background: var(--dashboard-background-card);
+  backdrop-filter: blur(50px);
+  border-bottom: 1px solid var(--dashboard-white-10);
+  color: var(--dashboard-text-primary);
+}
+
+/* Light theme cards */
+html:not(.dark) .dashboard-layout .card-glass {
+  background: #ffffff !important;
+  border: 0.3px solid #e5e7eb !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+html:not(.dark) .dashboard-layout .card-glass * {
+  color: inherit;
+}
+
+html:not(.dark) .dashboard-layout .card-glass .text-white,
+html:not(.dark) .dashboard-layout .card-glass h1,
+html:not(.dark) .dashboard-layout .card-glass h2,
+html:not(.dark) .dashboard-layout .card-glass h3,
+html:not(.dark) .dashboard-layout .card-glass h4,
+html:not(.dark) .dashboard-layout .card-glass h5,
+html:not(.dark) .dashboard-layout .card-glass h6 {
+  color: #000000 !important;
+}
+
+html:not(.dark) .dashboard-layout .card-glass .text-white\/70,
+html:not(.dark) .dashboard-layout .card-glass .text-white\/50 {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+html:not(.dark) .dashboard-layout .card-glass .text-muted-foreground {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+html:not(.dark) .dashboard-layout .card-glass .bg-black,
+html:not(.dark) .dashboard-layout .card-glass .bg-card\/50 {
+  background: #f8f9fa !important;
+}
+
+html:not(.dark) .dashboard-layout .card-glass [class*="border-"] {
+  border-color: #e5e7eb !important;
+}
+
+html:not(.dark) .dashboard-layout .card-glass .hover\:bg-card\/70:hover {
+  background: #f1f3f5 !important;
+}
+
+/* Light theme page content */
+html:not(.dark) .dashboard-layout h1,
+html:not(.dark) .dashboard-layout h2,
+html:not(.dark) .dashboard-layout h3,
+html:not(.dark) .dashboard-layout h4,
+html:not(.dark) .dashboard-layout h5,
+html:not(.dark) .dashboard-layout h6 {
+  color: #000000 !important;
+}
+
+html:not(.dark) .dashboard-layout .text-muted-foreground {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Dark theme cards */
+html.dark .dashboard-layout .card-glass {
+  background: #000000 !important;
+  border: 0.3px solid #4a4a4a !important;
+  box-shadow: none !important;
+}
+
+
