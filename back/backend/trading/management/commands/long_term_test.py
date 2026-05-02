@@ -1,7 +1,7 @@
 """
-Команда для долгосрочного тестирования агентов
+Team for long-term testing of agents
 
-Запускает непрерывное тестирование на заданное время или количество итераций.
+Runs continuous testing for a specified time or number of iterations.
 """
 import time
 import signal
@@ -18,7 +18,7 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = "Долгосрочное тестирование агентов (непрерывная работа)"
+help = "Long-term testing of agents (continuous operation)"
 
     def __init__(self):
         super().__init__()
@@ -27,46 +27,46 @@ class Command(BaseCommand):
         signal.signal(signal.SIGTERM, self.signal_handler)
 
     def signal_handler(self, signum, frame):
-        self.stdout.write(self.style.WARNING("\n\nПолучен сигнал остановки. Завершение тестирования..."))
+self.stdout.write(self.style.WARNING("\n\nStop signal received. Completing testing..."))
         self.running = False
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--user-id",
             type=int,
-            help="ID пользователя для тестирования",
+help="User ID for testing",
         )
         parser.add_argument(
             "--email",
             type=str,
-            help="Email пользователя для тестирования",
+help="User email for testing",
         )
         parser.add_argument(
             "--symbol",
             type=str,
             default="AAPL",
-            help="Символ для тестирования",
+help="Symbol for testing",
         )
         parser.add_argument(
             "--duration",
             type=int,
-            help="Длительность тестирования в минутах",
+help="Duration of testing in minutes",
         )
         parser.add_argument(
             "--iterations",
             type=int,
-            help="Максимальное количество итераций",
+help="Maximum number of iterations",
         )
         parser.add_argument(
             "--interval",
             type=int,
             default=60,
-            help="Интервал между итерациями в секундах (по умолчанию: 60)",
+help="Interval between iterations in seconds (default: 60)",
         )
         parser.add_argument(
             "--execute",
             action="store_true",
-            help="Выполнять реальные сделки",
+help="Execute real trades",
         )
 
     def handle(self, *args, **options):
@@ -82,35 +82,35 @@ class Command(BaseCommand):
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
-                self.stdout.write(self.style.ERROR(f"Пользователь с ID {user_id} не найден"))
+self.stdout.write(self.style.ERROR(f"User with ID {user_id} not found"))
                 return
         elif email:
             try:
                 user = User.objects.get(email=email)
             except User.DoesNotExist:
-                self.stdout.write(self.style.ERROR(f"Пользователь с email {email} не найден"))
+self.stdout.write(self.style.ERROR(f"User with email {email} not found"))
                 return
         else:
             user = User.objects.first()
             if not user:
-                self.stdout.write(self.style.ERROR("Нет пользователей в системе"))
+self.stdout.write(self.style.ERROR("No users in the system"))
                 return
 
         self.stdout.write(self.style.SUCCESS("="*70))
-        self.stdout.write(self.style.SUCCESS("ДОЛГОСРОЧНОЕ ТЕСТИРОВАНИЕ АГЕНТОВ"))
+self.stdout.write(self.style.SUCCESS("LONG-TERM AGENT TESTING"))
         self.stdout.write(self.style.SUCCESS("="*70))
-        self.stdout.write(f"Пользователь: {user.email}")
-        self.stdout.write(f"Символ: {symbol_code}")
-        self.stdout.write(f"Интервал: {interval} секунд")
-        self.stdout.write(f"Выполнение сделок: {'Да' if execute_trades else 'Нет'}")
+self.stdout.write(f"User: {user.email}")
+self.stdout.write(f"Symbol: {symbol_code}")
+self.stdout.write(f"Interval: {interval} seconds")
+self.stdout.write(f"Execute trades: {'Yes' if execute_trades else 'No'}")
         
         if duration_minutes:
             end_time = timezone.now() + timedelta(minutes=duration_minutes)
-            self.stdout.write(f"Длительность: {duration_minutes} минут (до {end_time.strftime('%H:%M:%S')})")
+self.stdout.write(f"Duration: {duration_minutes} minutes (up to {end_time.strftime('%H:%M:%S')})")
         if max_iterations:
-            self.stdout.write(f"Максимальное количество итераций: {max_iterations}")
+self.stdout.write(f"Maximum number of iterations: {max_iterations}")
         
-        self.stdout.write("\nНажмите Ctrl+C для остановки\n")
+self.stdout.write("\nPress Ctrl+C to stop\n")
 
         account, _ = Account.objects.get_or_create(
             user=user,
@@ -121,10 +121,10 @@ class Command(BaseCommand):
         initial_decisions = TradingDecision.objects.filter(user=user).count()
         initial_positions = Position.objects.filter(user=user, is_open=True).count()
 
-        self.stdout.write(f"Начальный баланс: ${initial_balance}")
-        self.stdout.write(f"Начальное количество сделок: {initial_trades}")
-        self.stdout.write(f"Начальное количество решений: {initial_decisions}")
-        self.stdout.write(f"Начальное количество позиций: {initial_positions}")
+self.stdout.write(f"Initial balance: ${initial_balance}")
+self.stdout.write(f"Initial number of trades: {initial_trades}")
+self.stdout.write(f"Initial number of decisions: {initial_decisions}")
+self.stdout.write(f"Initial number of positions: {initial_positions}")
         self.stdout.write("")
 
         test_command = TestAgentsCommand()
@@ -140,16 +140,16 @@ class Command(BaseCommand):
                 current_time = timezone.now()
 
                 if duration_minutes and current_time >= end_time:
-                    self.stdout.write(self.style.WARNING(f"\nДостигнуто время окончания тестирования"))
+self.stdout.write(self.style.WARNING(f"\nTest end time reached"))
                     break
 
                 if max_iterations and iteration > max_iterations:
-                    self.stdout.write(self.style.WARNING(f"\nДостигнуто максимальное количество итераций"))
+self.stdout.write(self.style.WARNING(f"\nMaximum number of iterations reached"))
                     break
 
                 elapsed = (current_time - start_time).total_seconds() / 60
                 self.stdout.write(self.style.SUCCESS(f"\n{'='*70}"))
-                self.stdout.write(f"Итерация
+self.stdout.write(f"Iteration
                 self.stdout.write(f"{'='*70}")
 
                 try:
@@ -198,7 +198,7 @@ class Command(BaseCommand):
                         decision_agent=decision_agent
                     )
 
-                    self.stdout.write(f"Решение: {decision.decision} (уверенность: {decision.confidence}%)")
+self.stdout.write(f"Decision: {decision.decision} (confidence: {decision.confidence}%)")
 
                     # Execution Agent
                     if decision.decision != "HOLD" and execute_trades:
@@ -227,7 +227,7 @@ class Command(BaseCommand):
                                 execution_result=execution_result
                             )
                             if trade:
-                                self.stdout.write(f"✓ Сделка выполнена: {trade.action} {trade.quantity} @ ${trade.price}")
+self.stdout.write(f"✓ Trade completed: {trade.action} {trade.quantity} @ ${trade.price}")
 
                     account.refresh_from_db()
                     current_balance = account.balance
@@ -235,29 +235,29 @@ class Command(BaseCommand):
                     current_positions = Position.objects.filter(user=user, is_open=True).count()
 
                     balance_change = current_balance - initial_balance
-                    self.stdout.write(f"\nСтатистика:")
-                    self.stdout.write(f"  Баланс: ${current_balance} (изменение: ${balance_change:+.2f})")
-                    self.stdout.write(f"  Сделок: {current_trades} (+{current_trades - initial_trades})")
-                    self.stdout.write(f"  Позиций: {current_positions}")
+self.stdout.write(f"\nStatistics:")
+self.stdout.write(f" Balance: ${current_balance} (change: ${balance_change:+.2f})")
+self.stdout.write(f" Trades: {current_trades} (+{current_trades - initial_trades})")
+self.stdout.write(f" Positions: {current_positions}")
 
                 except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"Ошибка в итерации {iteration}: {str(e)}"))
+self.stdout.write(self.style.ERROR(f"Error in iteration {iteration}: {str(e)}"))
                     import traceback
                     self.stdout.write(traceback.format_exc())
 
                 if self.running and (not max_iterations or iteration < max_iterations):
                     if duration_minutes and timezone.now() < end_time:
-                        self.stdout.write(f"\nОжидание {interval} секунд...")
+self.stdout.write(f"\nWaiting {interval} seconds...")
                         for _ in range(interval):
                             if not self.running:
                                 break
                             time.sleep(1)
 
         except KeyboardInterrupt:
-            self.stdout.write(self.style.WARNING("\n\nПолучен сигнал прерывания"))
+self.stdout.write(self.style.WARNING("\n\nInterrupt signal received"))
 
         self.stdout.write(self.style.SUCCESS(f"\n{'='*70}"))
-        self.stdout.write(self.style.SUCCESS("ФИНАЛЬНАЯ СТАТИСТИКА"))
+self.stdout.write(self.style.SUCCESS("FINAL STATISTICS"))
         self.stdout.write(self.style.SUCCESS(f"{'='*70}"))
 
         account.refresh_from_db()
@@ -268,24 +268,24 @@ class Command(BaseCommand):
 
         total_time = (timezone.now() - start_time).total_seconds() / 60
 
-        self.stdout.write(f"Время работы: {total_time:.1f} минут")
-        self.stdout.write(f"Итераций выполнено: {iteration}")
-        self.stdout.write(f"\nБаланс:")
-        self.stdout.write(f"  Начальный: ${initial_balance}")
-        self.stdout.write(f"  Финальный: ${final_balance}")
-        self.stdout.write(f"  Изменение: ${final_balance - initial_balance:+.2f}")
+self.stdout.write(f"Working time: {total_time:.1f} minutes")
+self.stdout.write(f"Iterations completed: {iteration}")
+self.stdout.write(f"\nBalance:")
+self.stdout.write(f" Initial: ${initial_balance}")
+self.stdout.write(f" Final: ${final_balance}")
+self.stdout.write(f" Change: ${final_balance - initial_balance:+.2f}")
 
-        self.stdout.write(f"\nСделки:")
-        self.stdout.write(f"  Начальное: {initial_trades}")
-        self.stdout.write(f"  Финальное: {final_trades}")
-        self.stdout.write(f"  Выполнено: {final_trades - initial_trades}")
+self.stdout.write(f"\nTransactions:")
+self.stdout.write(f" Initial: {initial_trades}")
+self.stdout.write(f" Final: {final_trades}")
+self.stdout.write(f" Done: {final_trades - initial_trades}")
 
-        self.stdout.write(f"\nРешения:")
-        self.stdout.write(f"  Всего: {final_decisions}")
-        self.stdout.write(f"  Новых: {final_decisions - initial_decisions}")
+self.stdout.write(f"\nSolutions:")
+self.stdout.write(f" Total: {final_decisions}")
+self.stdout.write(f" New: {final_decisions - initial_decisions}")
 
-        self.stdout.write(f"\nПозиции:")
-        self.stdout.write(f"  Открыто: {final_positions}")
+self.stdout.write(f"\nPositions:")
+self.stdout.write(f" Open: {final_positions}")
 
-        self.stdout.write(self.style.SUCCESS("\n✓ Долгосрочное тестирование завершено!"))
+self.stdout.write(self.style.SUCCESS("\n✓ Long-term testing completed!"))
 

@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { KPICards } from '@/components/Dashboard/KPICards';
 import { CandlestickChart } from '@/components/CryptoDashboard/CandlestickChart';
-import { LiveAgentStatusCards } from '@/components/Dashboard/LiveAgentStatusCards';
 import { TradeActivityFeed } from '@/components/Dashboard/TradeActivityFeed';
 import { MarketHeatmap } from '@/components/Dashboard/MarketHeatmap';
 import { MessageLog } from '@/components/Dashboard/MessageLog';
@@ -15,8 +14,7 @@ import { AlertCircle } from 'lucide-react';
 
 function DashboardContent() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>('BTCUSDT');
-  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('1h');
-  const { data, loading, error } = useDashboard(selectedSymbol, selectedTimeframe);
+  const { data, loading, error } = useDashboard(selectedSymbol, '1h');
 
   const formatSymbol = (symbol: string) => {
     return symbol.replace('USDT', '/USDT');
@@ -54,7 +52,7 @@ function DashboardContent() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-white dark:text-white text-black">Dashboard Overview</h2>
-          <p className="text-muted-foreground mt-1">Monitor your multi-agent trading system in real-time</p>
+          <p className="text-muted-foreground mt-1">Live market view, paper portfolio KPIs, and recent activity</p>
         </div>
       </div>
 
@@ -70,14 +68,12 @@ function DashboardContent() {
       <div className="space-y-4">
         <KPICards
           balance={data.balance}
+          initialBalance={data.initialBalance}
           todayPnL={data.todayPnL}
           winRate={data.winRate}
-          agentsStatus={data.agentsStatus}
+          todayTradesCount={data.todayTradesCount}
         />
       </div>
-
-      {/* Live Agent Status Cards */}
-      <LiveAgentStatusCards agents={data.agents} />
 
       {/* Market Chart & Heatmap Grid */}
       <div className="grid gap-6 lg:grid-cols-2">

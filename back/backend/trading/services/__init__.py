@@ -1,5 +1,5 @@
 """
-Сервисы для работы с данными рынка
+Market data service exports (Binance helpers + re-exported facades).
 """
 import os
 import sys

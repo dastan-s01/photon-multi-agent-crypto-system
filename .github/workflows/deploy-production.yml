@@ -1,0 +1,85 @@
+name: Deploy production (full stack)
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p 22 -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload .env.deploy to server
+        env:
+          ENV_DEPLOY: ${{ secrets.ENV_DEPLOY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          if [ -z "${ENV_DEPLOY}" ]; then
+            echo "ENV_DEPLOY secret is empty"
+            exit 1
+          fi
+          printf '%s\n' "$ENV_DEPLOY" > /tmp/.env.deploy
+          chmod 600 /tmp/.env.deploy
+          scp -i ~/.ssh/id_deploy -P 22 -o StrictHostKeyChecking=yes \
+            /tmp/.env.deploy "${SSH_USER}@${SERVER_HOST}:~/photon/.env.deploy"
+          rm -f /tmp/.env.deploy
+
+      - name: Remote git pull and compose
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            REPO_URL="https://github.com/${GITHUB_REPOSITORY}.git"
+          else
+            REPO_URL="https://${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
+
+          ssh -i ~/.ssh/id_deploy -p 22 "${SSH_USER}@${SERVER_HOST}" \
+            env "REPO_URL=${REPO_URL}" bash -s <<'REMOTE'
+          set -euo pipefail
+          REPO_DIR="${REPO_DIR:-$HOME/photon}"
+
+          if [ ! -d "$REPO_DIR/.git" ]; then
+            echo "No clone at $REPO_DIR"
+            exit 1
+          fi
+
+          cd "$REPO_DIR"
+          git remote set-url origin "$REPO_URL"
+          git fetch origin
+          git reset --hard origin/main
+          git clean -fd
+
+          if [ ! -f .env.deploy ]; then
+            echo ".env.deploy missing"
+            exit 1
+          fi
+          if [ ! -f back/backend/.env ]; then
+            cp back/backend/env.example back/backend/.env
+          fi
+
+          export DOCKER_BUILDKIT=1
+          export COMPOSE_DOCKER_CLI_BUILD=1
+          docker compose -f docker-compose.deploy.yml --env-file .env.deploy down --remove-orphans 2>/dev/null || true
+          docker compose -f docker-compose.deploy.yml --env-file .env.deploy build --parallel
+          docker compose -f docker-compose.deploy.yml --env-file .env.deploy up -d
+
+          docker compose -f docker-compose.deploy.yml ps
+          REMOTE

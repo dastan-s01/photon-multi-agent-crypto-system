@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from trading.models import Symbol, MarketData, TradingDecision, AgentStatus, Account, Position, Trade, AgentLog
+from trading.views import apply_demo_ledger_from_backtest
 from trading.serializers import TradingDecisionSerializer, TradeSerializer
 from trading.agents.meta_model_selector import MetaModelSelector
 from trading.agents.asset_filter import get_asset_filter
@@ -674,7 +675,22 @@ class MetaModelBacktestView(APIView):
             
             if not result.get("success", False):
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
-            
+
+            apply_to_account = request.data.get("apply_to_account", True)
+            if apply_to_account:
+                try:
+                    apply_demo_ledger_from_backtest(
+                        request.user, Decimal(str(result["final_balance"]))
+                    )
+                    result = {**result, "account_synced": True}
+                except Exception as sync_err:
+                    logger.error("Failed to sync backtest balance to demo account: %s", sync_err, exc_info=True)
+                    result = {
+                        **result,
+                        "account_synced": False,
+                        "account_sync_error": str(sync_err),
+                    }
+
             return Response(result, status=status.HTTP_200_OK)
             
         except Exception as e:

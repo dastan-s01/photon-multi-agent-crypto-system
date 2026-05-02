@@ -3,7 +3,7 @@ from django.db import models
 
 
 class UserManager(BaseUserManager):
-    """Кастомный менеджер для User с email вместо username"""
+    """Custom user manager: email is the unique identifier instead of username."""
 
     def create_user(self, email, password=None, **extra_fields):
         if not email:

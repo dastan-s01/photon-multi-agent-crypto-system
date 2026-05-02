@@ -1,6 +1,4 @@
-"""
-Команда для добавления дефолтных символов существующим пользователям
-"""
+"""Seed a default watchlist per user (or one user)."""
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from trading.models import Symbol
@@ -28,18 +26,18 @@ DEFAULT_SYMBOLS = [
 
 
 class Command(BaseCommand):
-    help = "Добавляет дефолтные символы всем пользователям или указанному пользователю"
+    help = "Add default symbols to all users or one user"
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--user-id",
             type=int,
-            help="ID пользователя (если не указан, добавляет всем пользователям)",
+            help="Limit to this user id (omit = all users)",
         )
         parser.add_argument(
             "--email",
             type=str,
-            help="Email пользователя (альтернатива --user-id)",
+            help="Limit to this email",
         )
 
     def handle(self, *args, **options):
@@ -50,13 +48,13 @@ class Command(BaseCommand):
             try:
                 users = [User.objects.get(id=user_id)]
             except User.DoesNotExist:
-                self.stdout.write(self.style.ERROR(f"Пользователь с ID {user_id} не найден"))
+                self.stdout.write(self.style.ERROR(f"No user with id {user_id}"))
                 return
         elif email:
             try:
                 users = [User.objects.get(email=email)]
             except User.DoesNotExist:
-                self.stdout.write(self.style.ERROR(f"Пользователь с email {email} не найден"))
+                self.stdout.write(self.style.ERROR(f"No user with email {email}"))
                 return
         else:
             users = User.objects.all()
@@ -79,11 +77,11 @@ class Command(BaseCommand):
             total_added += user_added
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"Пользователь {user.email}: добавлено {user_added} символов"
+                    f"{user.email}: added {user_added} symbols"
                 )
             )
 
         self.stdout.write(
-            self.style.SUCCESS(f"\nВсего добавлено символов: {total_added}")
+            self.style.SUCCESS(f"\nTotal symbols added: {total_added}")
         )
 

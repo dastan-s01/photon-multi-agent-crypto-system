@@ -1,5 +1,5 @@
 """
-Сервисы для работы с данными рынка через yfinance и Bybit API
+Market data services backed by yfinance and the Bybit API.
 """
 import logging
 import os
@@ -22,7 +22,7 @@ _DEFAULT_USER_AGENT = (
 )
 
 def _setup_yfinance_headers():
-    """Настраивает заголовки для yfinance запросов"""
+    """Patch requests defaults so yfinance calls carry browser-like headers."""
     original_get = requests.get
     original_post = requests.post
     
@@ -52,12 +52,11 @@ _setup_yfinance_headers()
 
 
 class BybitDataService:
-    """Сервис для получения данных рынка через Bybit API"""
+    """Bybit REST client for tickers and klines."""
 
     def __init__(self, api_key: str = "", secret_key: str = "", testnet: bool = False):
         """
-        Инициализация сервиса Bybit
-        api_key и secret_key опциональны для публичных данных
+        api_key / secret_key are optional for public market endpoints.
         """
         self.api_key = api_key
         self.secret_key = secret_key
@@ -65,7 +64,7 @@ class BybitDataService:
         self.base_url = "https://api-testnet.bybit.com" if testnet else "https://api.bybit.com"
 
     def _generate_signature(self, params: dict, timestamp: str) -> str:
-        """Генерирует подпись для приватных запросов"""
+        """Build HMAC signature for authenticated calls."""
         if not self.secret_key:
             return ""
         
@@ -83,7 +82,7 @@ class BybitDataService:
         return signature
 
     def _make_request(self, endpoint: str, params: dict = None, private: bool = False) -> Optional[dict]:
-        """Выполняет HTTP запрос к Bybit API"""
+        """HTTP GET helper with optional signed headers."""
         if params is None:
             params = {}
         
@@ -123,9 +122,8 @@ class BybitDataService:
 
     def get_latest_data(self, symbol: str, category: str = "spot") -> Optional[Dict]:
         """
-        Получает последние данные по символу с Bybit
-        symbol должен быть в формате Bybit (например: BTCUSDT, ETHUSDT)
-        category: spot, linear, inverse
+        Latest ticker snapshot. Symbol must be Bybit-style (e.g. BTCUSDT).
+        category: spot | linear | inverse
         """
         try:
             result = self._make_request("/v5/market/tickers", {
@@ -165,9 +163,8 @@ class BybitDataService:
         self, symbol: str, category: str = "spot", interval: str = "1", limit: int = 200
     ) -> Optional[List[Dict]]:
         """
-        Получает исторические данные с Bybit
-        interval: 1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M (в минутах, кроме D/W/M)
-        limit: количество свечей (максимум 200)
+        Historical klines from Bybit.
+        interval: minutes except D/W/M letters; limit <= 200.
         """
         try:
             result = self._make_request("/v5/market/kline", {
@@ -203,7 +200,7 @@ class BybitDataService:
             return None
 
     def validate_symbol(self, symbol: str, category: str = "spot") -> bool:
-        """Проверяет, существует ли символ на Bybit"""
+        """Return True if Bybit returns a ticker row."""
         try:
             result = self._make_request("/v5/market/tickers", {
                 "category": category,
@@ -215,8 +212,7 @@ class BybitDataService:
 
     def normalize_symbol(self, symbol: str) -> str:
         """
-        Нормализует символ для Bybit
-        Например: BTC -> BTCUSDT, ETH -> ETHUSDT
+        Normalize user input to Bybit perpetual/spot style (append USDT when missing).
         """
         symbol = symbol.upper().strip()
         if any(suffix in symbol for suffix in ["USDT", "USDC", "BTC", "ETH", "BNB", "BUSD"]):
@@ -225,12 +221,11 @@ class BybitDataService:
 
 
 class MarketDataService:
-    """Сервис для получения данных рынка (поддерживает yfinance и Bybit)"""
+    """Facade that routes symbols to yfinance and/or Bybit."""
 
     def __init__(self, data_source: str = "auto"):
         """
-        Инициализация сервиса
-        data_source: "yfinance", "bybit", или "auto" (автоматический выбор)
+        data_source: "yfinance" | "bybit" | "auto" (heuristic routing).
         """
         self.data_source = data_source
         if data_source in ["bybit", "auto"]:
@@ -245,8 +240,7 @@ class MarketDataService:
 
     def get_latest_data(self, symbol: str) -> Optional[Dict]:
         """
-        Получает последние данные по символу
-        Returns: dict с данными или None при ошибке
+        Latest OHLCV-style dict or None on failure.
         """
         use_bybit = False
         if self.data_source == "bybit":
@@ -328,10 +322,7 @@ class MarketDataService:
 
     def get_historical_data(self, symbol: str, period: str = "1mo", interval: str = "1d") -> Optional[List[Dict]]:
         """
-        Получает исторические данные
-        period: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max (только для yfinance)
-        interval: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo (yfinance)
-                  1, 3, 5, 15, 30, 60, 120, 240, 360, 720, D, W, M (Bybit)
+        Historical candles. yfinance uses period/interval; Bybit path maps equivalents.
         """
         use_bybit = False
         if self.data_source == "bybit":
@@ -377,7 +368,7 @@ class MarketDataService:
             return None
 
     def validate_symbol(self, symbol: str) -> bool:
-        """Проверяет, существует ли символ"""
+        """True if either Bybit or yfinance can resolve the symbol."""
         if self.bybit_service:
             bybit_symbol = self.bybit_service.normalize_symbol(symbol)
             if self.bybit_service.validate_symbol(bybit_symbol):
@@ -406,9 +397,7 @@ class MarketDataService:
 
 
 def get_market_data_service(data_source: Optional[str] = None) -> MarketDataService:
-    """
-    Helper функция для получения MarketDataService с настройками из Django settings
-    """
+    """Factory wired to `MARKET_DATA_SOURCE` from Django settings."""
     if data_source is None:
         from django.conf import settings
         data_source = getattr(settings, "MARKET_DATA_SOURCE", "auto")

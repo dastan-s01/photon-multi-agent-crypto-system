@@ -1,7 +1,7 @@
 """
-Команда для скачивания исторических данных в CSV файлы для backtest.
+Command to download historical data into CSV files for backtest.
 
-Использование:
+Usage:
     python manage.py download_historical_data --symbol AAPL --period 1y --interval 1h
     python manage.py download_historical_data --symbol BTCUSDT --period 1mo --interval 1h
 """
@@ -12,32 +12,32 @@ from trading.agents.market_monitor import MarketMonitoringAgent
 
 
 class Command(BaseCommand):
-    help = "Скачивает исторические данные в CSV файл для backtest"
+help = "Downloads historical data to a CSV file for backtest"
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--symbol",
             type=str,
             required=True,
-            help="Символ для скачивания (например, AAPL, BTCUSDT)",
+help="Download symbol (eg AAPL, BTCUSDT)",
         )
         parser.add_argument(
             "--period",
             type=str,
             default="1y",
-            help="Период данных (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max)",
+help="Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max)",
         )
         parser.add_argument(
             "--interval",
             type=str,
             default="1h",
-            help="Интервал данных (1m, 5m, 15m, 30m, 1h, 4h, 1d)",
+help="Data interval (1m, 5m, 15m, 30m, 1h, 4h, 1d)",
         )
         parser.add_argument(
             "--output-dir",
             type=str,
             default="./data",
-            help="Директория для сохранения CSV файлов (по умолчанию: ./data)",
+help="Directory for saving CSV files (default: ./data)",
         )
 
     def handle(self, *args, **options):
@@ -47,17 +47,17 @@ class Command(BaseCommand):
         output_dir = options["output_dir"]
 
         self.stdout.write(self.style.SUCCESS("=" * 70))
-        self.stdout.write(self.style.SUCCESS("СКАЧИВАНИЕ ИСТОРИЧЕСКИХ ДАННЫХ"))
+self.stdout.write(self.style.SUCCESS("DOWNLOADING HISTORICAL DATA"))
         self.stdout.write(self.style.SUCCESS("=" * 70))
-        self.stdout.write(f"Символ: {symbol}")
-        self.stdout.write(f"Период: {period}")
-        self.stdout.write(f"Интервал: {interval}")
-        self.stdout.write(f"Выходная директория: {output_dir}\n")
+self.stdout.write(f"Symbol: {symbol}")
+self.stdout.write(f"Period: {period}")
+self.stdout.write(f"Interval: {interval}")
+self.stdout.write(f"Output directory: {output_dir}\n")
 
         os.makedirs(output_dir, exist_ok=True)
 
         try:
-            self.stdout.write("[1/3] Инициализация агента...")
+self.stdout.write("[1/3] Agent initialization...")
             market_agent = MarketMonitoringAgent(
                 ticker=symbol,
                 interval=interval,
@@ -67,29 +67,29 @@ class Command(BaseCommand):
                 max_retries=5,
                 backoff_factor=3.0,
             )
-            self.stdout.write(self.style.SUCCESS("✓ Агент инициализирован"))
+self.stdout.write(self.style.SUCCESS("✓ Agent initialized"))
 
-            self.stdout.write("\n[2/3] Загрузка данных...")
-            self.stdout.write("Это может занять некоторое время, особенно если yfinance блокируется...")
+self.stdout.write("\n[2/3] Loading data...")
+self.stdout.write("This may take a while, especially if yfinance is blocked...")
             
             try:
                 data, analysis = market_agent.get_processed_data(analyze=True)
             except Exception as e:
-                self.stdout.write(self.style.WARNING(f"Ошибка при получении данных: {e}"))
-                self.stdout.write("Пробуем получить данные без анализа...")
+self.stdout.write(self.style.WARNING(f"Error while receiving data: {e}"))
+self.stdout.write("We are trying to get data without analysis...")
                 data = market_agent.get_processed_data(analyze=False)
                 analysis = None
 
             if data is None or data.empty:
-                self.stdout.write(self.style.ERROR("Не удалось загрузить данные"))
+self.stdout.write(self.style.ERROR("Failed to load data"))
                 return
 
-            self.stdout.write(self.style.SUCCESS(f"✓ Загружено {len(data)} записей"))
+self.stdout.write(self.style.SUCCESS(f"✓ {len(data)} records loaded"))
             if len(data) > 0:
-                self.stdout.write(f"  Первая дата: {data.index[0]}")
-                self.stdout.write(f"  Последняя дата: {data.index[-1]}")
+self.stdout.write(f" First date: {data.index[0]}")
+self.stdout.write(f" Last date: {data.index[-1]}")
 
-            self.stdout.write("\n[3/3] Сохранение в CSV...")
+self.stdout.write("\n[3/3] Saving to CSV...")
             filename = f"{symbol}_{interval}.csv"
             filepath = os.path.join(output_dir, filename)
 
@@ -117,22 +117,22 @@ class Command(BaseCommand):
             data_to_save = data_to_save[data_to_save.index.notna()]
             
             data_to_save.to_csv(filepath, index=True, date_format='%Y-%m-%d %H:%M:%S')
-            self.stdout.write(self.style.SUCCESS(f"✓ Данные сохранены в: {filepath}"))
+self.stdout.write(self.style.SUCCESS(f"✓ Data saved in: {filepath}"))
 
             self.stdout.write("\n" + "=" * 70)
-            self.stdout.write(self.style.SUCCESS("СТАТИСТИКА"))
+self.stdout.write(self.style.SUCCESS("STATISTICS"))
             self.stdout.write("=" * 70)
-            self.stdout.write(f"Всего записей: {len(data)}")
-            self.stdout.write(f"Колонки: {', '.join(data.columns)}")
+self.stdout.write(f"Total records: {len(data)}")
+self.stdout.write(f"Columns: {', '.join(data.columns)}")
             
             if analysis:
-                self.stdout.write(f"\nАнализ рынка:")
-                self.stdout.write(f"  Тренд: {analysis.get('trend', 'unknown')}")
-                self.stdout.write(f"  Сила: {analysis.get('strength', 0.0):.2f}")
+self.stdout.write(f"\nMarket analysis:")
+self.stdout.write(f" Trend: {analysis.get('trend', 'unknown')}")
+self.stdout.write(f" Strength: {analysis.get('strength', 0.0):.2f}")
             
-            self.stdout.write(f"\nФайл готов для использования в backtest:")
+self.stdout.write(f"\nThe file is ready for use in backtest:")
             self.stdout.write(self.style.SUCCESS(f"  {filepath}"))
-            self.stdout.write("\nИспользование:")
+self.stdout.write("\nUsage:")
             self.stdout.write(f"  docker compose exec backend python manage.py backtest_simulation \\")
             self.stdout.write(f"    --email your@email.com \\")
             self.stdout.write(f"    --symbol {symbol} \\")
@@ -142,7 +142,7 @@ class Command(BaseCommand):
             self.stdout.write("=" * 70)
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Ошибка: {e}"))
+self.stdout.write(self.style.ERROR(f"Error: {e}"))
             import traceback
             self.stdout.write(traceback.format_exc())
 

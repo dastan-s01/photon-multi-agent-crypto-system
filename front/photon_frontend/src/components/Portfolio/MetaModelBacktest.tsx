@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,23 @@ export function MetaModelBacktest({ onComplete }: MetaModelBacktestProps) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const p = await apiClient.getPortfolio();
+        if (!cancelled && p?.balance != null) {
+          setInitialBalance(String(p.balance));
+        }
+      } catch {
+        /* keep default */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const runBacktest = async () => {
     setLoading(true);
     setError(null);
@@ -34,6 +51,7 @@ export function MetaModelBacktest({ onComplete }: MetaModelBacktestProps) {
         retrain_interval: 50,
         use_ensemble: true,
         use_regime_switching: true,
+        apply_to_account: true,
       });
       setResult(response);
       if (onComplete) {
@@ -83,7 +101,7 @@ export function MetaModelBacktest({ onComplete }: MetaModelBacktestProps) {
             />
           </div>
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">Initial Balance</p>
+            <p className="text-sm text-muted-foreground">Simulation start (USD)</p>
             <Input
               type="number"
               value={initialBalance}
@@ -91,6 +109,10 @@ export function MetaModelBacktest({ onComplete }: MetaModelBacktestProps) {
               placeholder="10000"
               className="bg-background/60"
             />
+            <p className="text-xs text-muted-foreground">
+              Prefilled from your paper balance; only affects the historical run, not the sync target
+              (sync uses final balance below).
+            </p>
           </div>
         </div>
 
@@ -113,6 +135,24 @@ export function MetaModelBacktest({ onComplete }: MetaModelBacktestProps) {
           <Alert variant="destructive">
             <XCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {result?.account_synced === true && (
+          <Alert>
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>
+              Paper account balance was set to the backtest final equity. Demo trade history and open
+              positions were cleared so the ledger stays consistent.
+            </AlertDescription>
+          </Alert>
+        )}
+        {result?.account_synced === false && result?.account_sync_error && (
+          <Alert variant="destructive">
+            <XCircle className="h-4 w-4" />
+            <AlertDescription>
+              Backtest finished but the account was not updated: {result.account_sync_error}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -330,7 +370,8 @@ export function MetaModelBacktest({ onComplete }: MetaModelBacktestProps) {
         )}
 
         <p className="text-xs text-muted-foreground">
-          Walk-forward backtesting with ensemble ML models and dynamic regime-based selection.
+          Walk-forward simulation only uses historical candles; after a run, the paper wallet is
+          reset to the simulated final balance (same as your main demo balance in Portfolio).
         </p>
       </CardContent>
     </Card>

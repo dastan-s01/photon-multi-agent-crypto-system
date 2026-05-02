@@ -1,5 +1,5 @@
 """
-Сервис для получения исторических данных через Binance REST API
+Binance REST API client (klines and 24h ticker).
 """
 import logging
 import requests
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class BinanceAPIService:
-    """Сервис для получения данных через Binance REST API"""
+    """Thin wrapper around Binance `/api/v3` public endpoints."""
     
     def __init__(self):
         self.base_url = "https://api.binance.com/api/v3"
@@ -26,17 +26,8 @@ class BinanceAPIService:
         end_time: Optional[int] = None
     ) -> Optional[List[Dict]]:
         """
-        Получает исторические свечи (kline) через Binance REST API
-        
-        Args:
-            symbol: Символ (например, "BTCUSDT")
-            interval: Интервал (1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M)
-            limit: Количество свечей (максимум 1000)
-            start_time: Начальное время (timestamp в миллисекундах)
-            end_time: Конечное время (timestamp в миллисекундах)
-        
-        Returns:
-            Список словарей с данными свечей
+        Fetch klines. `symbol` like BTCUSDT; `interval` per Binance docs; max `limit` 1000.
+        Optional `start_time` / `end_time` in milliseconds.
         """
         symbol = symbol.upper()
         url = f"{self.base_url}/klines"
@@ -93,17 +84,7 @@ class BinanceAPIService:
         interval: str = "1h",
         days: int = 30
     ) -> Optional[List[Dict]]:
-        """
-        Получает исторические данные за указанный период
-        
-        Args:
-            symbol: Символ
-            interval: Интервал
-            days: Количество дней истории
-        
-        Returns:
-            Список данных свечей
-        """
+        """Walk backwards with repeated `get_klines` calls until `days` of coverage."""
         end_time = datetime.now()
         start_time = end_time - timedelta(days=days)
         
@@ -145,15 +126,7 @@ class BinanceAPIService:
         return all_data if all_data else None
     
     def get_ticker(self, symbol: str) -> Optional[Dict]:
-        """
-        Получает текущий тикер для символа
-        
-        Args:
-            symbol: Символ
-        
-        Returns:
-            dict с данными тикера
-        """
+        """24h ticker stats for `symbol`."""
         symbol = symbol.upper()
         url = f"{self.base_url}/ticker/24hr"
         

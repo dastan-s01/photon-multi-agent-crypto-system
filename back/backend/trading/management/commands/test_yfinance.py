@@ -1,7 +1,5 @@
 """
-Команда для проверки работы yfinance
-
-Проверяет, может ли yfinance получать данные с Yahoo Finance
+Management command: verify yfinance can reach Yahoo Finance.
 """
 import sys
 import requests
@@ -19,7 +17,7 @@ _DEFAULT_USER_AGENT = (
 )
 
 def _setup_yfinance_headers():
-    """Настраивает заголовки для yfinance запросов"""
+    """Patch requests so yfinance uses browser-like headers."""
     original_get = requests.get
     original_post = requests.post
     
@@ -46,86 +44,86 @@ def _setup_yfinance_headers():
 
 
 class Command(BaseCommand):
-    help = "Проверяет работу yfinance для получения данных рынка"
+    help = "Smoke-test yfinance market data"
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--symbol",
             type=str,
             default="AAPL",
-            help="Символ для тестирования (по умолчанию: AAPL)",
+            help="Symbol to test (default: AAPL)",
         )
 
     def handle(self, *args, **options):
         symbol = options.get("symbol", "AAPL")
         
         self.stdout.write(self.style.SUCCESS("="*70))
-        self.stdout.write(self.style.SUCCESS("ПРОВЕРКА YFINANCE"))
+        self.stdout.write(self.style.SUCCESS("YFINANCE CHECK"))
         self.stdout.write(self.style.SUCCESS("="*70))
-        self.stdout.write(f"Символ: {symbol}\n")
+        self.stdout.write(f"Symbol: {symbol}\n")
         
         if not YFINANCE_AVAILABLE:
-            self.stdout.write(self.style.ERROR("✗ yfinance не установлен!"))
-            self.stdout.write("Установите: pip install yfinance")
+            self.stdout.write(self.style.ERROR("✗ yfinance is not installed!"))
+            self.stdout.write("Install: pip install yfinance")
             return
         
-        self.stdout.write("✓ yfinance установлен")
+        self.stdout.write("✓ yfinance import OK")
         
         _setup_yfinance_headers()
-        self.stdout.write("✓ User-Agent заголовки настроены\n")
+        self.stdout.write("✓ User-Agent headers patched\n")
         
-        self.stdout.write("[1/4] Создание тикера...")
+        self.stdout.write("[1/4] Creating ticker...")
         try:
             ticker = yf.Ticker(symbol)
-            self.stdout.write(self.style.SUCCESS("✓ Тикер создан"))
+            self.stdout.write(self.style.SUCCESS("✓ Ticker created"))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"✗ Ошибка создания тикера: {str(e)}"))
+            self.stdout.write(self.style.ERROR(f"✗ Failed to create ticker: {str(e)}"))
             return
         
-        self.stdout.write("\n[2/4] Получение info...")
+        self.stdout.write("\n[2/4] Fetching info...")
         try:
             info = ticker.info
             if info and len(info) > 0:
-                self.stdout.write(self.style.SUCCESS(f"✓ Info получен ({len(info)} полей)"))
+                self.stdout.write(self.style.SUCCESS(f"✓ Info received ({len(info)} fields)"))
                 if "longName" in info:
-                    self.stdout.write(f"  Название: {info.get('longName', 'N/A')}")
+                    self.stdout.write(f"  Name: {info.get('longName', 'N/A')}")
                 if "currentPrice" in info:
-                    self.stdout.write(f"  Текущая цена: ${info.get('currentPrice', 'N/A')}")
+                    self.stdout.write(f"  Last price: ${info.get('currentPrice', 'N/A')}")
             else:
-                self.stdout.write(self.style.WARNING("⚠ Info пустой"))
+                self.stdout.write(self.style.WARNING("⚠ Info empty"))
         except Exception as e:
-            self.stdout.write(self.style.WARNING(f"⚠ Не удалось получить info: {str(e)}"))
+            self.stdout.write(self.style.WARNING(f"⚠ Could not read info: {str(e)}"))
         
-        self.stdout.write("\n[3/4] Получение исторических данных (1 день)...")
+        self.stdout.write("\n[3/4] History (1 day, 1h)...")
         try:
             hist = ticker.history(period="1d", interval="1h")
             if not hist.empty:
-                self.stdout.write(self.style.SUCCESS(f"✓ Данные получены ({len(hist)} записей)"))
+                self.stdout.write(self.style.SUCCESS(f"✓ Rows: {len(hist)}"))
                 latest = hist.iloc[-1]
-                self.stdout.write(f"  Последняя цена: ${latest['Close']:.2f}")
-                self.stdout.write(f"  Объем: {int(latest['Volume'])}")
+                self.stdout.write(f"  Last close: ${latest['Close']:.2f}")
+                self.stdout.write(f"  Volume: {int(latest['Volume'])}")
             else:
-                self.stdout.write(self.style.WARNING("⚠ Данные пустые"))
+                self.stdout.write(self.style.WARNING("⚠ Empty history"))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"✗ Ошибка получения данных: {str(e)}"))
-            self.stdout.write("\nВозможные причины:")
-            self.stdout.write("  - Нет интернет-соединения")
-            self.stdout.write("  - Yahoo Finance недоступен")
-            self.stdout.write("  - Проблемы с прокси/файрволом")
-            self.stdout.write("  - Символ не существует")
+            self.stdout.write(self.style.ERROR(f"✗ History error: {str(e)}"))
+            self.stdout.write("\nPossible causes:")
+            self.stdout.write("  - No network")
+            self.stdout.write("  - Yahoo Finance unreachable")
+            self.stdout.write("  - Proxy / firewall")
+            self.stdout.write("  - Invalid symbol")
             return
         
-        self.stdout.write("\n[4/4] Получение данных за месяц (1h интервал)...")
+        self.stdout.write("\n[4/4] History (1 month, 1h)...")
         try:
             hist = ticker.history(period="1mo", interval="1h")
             if not hist.empty:
-                self.stdout.write(self.style.SUCCESS(f"✓ Данные получены ({len(hist)} записей)"))
-                self.stdout.write(f"  Период: {hist.index[0]} - {hist.index[-1]}")
-                self.stdout.write(f"  Последняя цена: ${hist.iloc[-1]['Close']:.2f}")
+                self.stdout.write(self.style.SUCCESS(f"✓ Rows: {len(hist)}"))
+                self.stdout.write(f"  Range: {hist.index[0]} - {hist.index[-1]}")
+                self.stdout.write(f"  Last close: ${hist.iloc[-1]['Close']:.2f}")
             else:
-                self.stdout.write(self.style.WARNING("⚠ Данные пустые"))
+                self.stdout.write(self.style.WARNING("⚠ Empty history"))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"✗ Ошибка получения данных: {str(e)}"))
+            self.stdout.write(self.style.ERROR(f"✗ History error: {str(e)}"))
             return
         
         self.stdout.write(self.style.SUCCESS("\n" + "="*70))
@@ -136,24 +134,22 @@ class Command(BaseCommand):
         try:
             if ticker and not hist.empty:
                 tests_passed += 1
-        except:
+        except Exception:
             pass
         
         if tests_passed >= 2:
-            self.stdout.write(self.style.SUCCESS("✓ YFINANCE РАБОТАЕТ КОРРЕКТНО"))
+            self.stdout.write(self.style.SUCCESS("✓ YFINANCE LOOKS OK"))
             self.stdout.write(self.style.SUCCESS("="*70))
-            self.stdout.write("\nMarketMonitoringAgent должен работать нормально.")
+            self.stdout.write("\nMarketMonitoringAgent should be able to pull Yahoo data.")
         else:
-            self.stdout.write(self.style.ERROR("✗ YFINANCE НЕ РАБОТАЕТ"))
+            self.stdout.write(self.style.ERROR("✗ YFINANCE CHECK FAILED"))
             self.stdout.write(self.style.ERROR("="*70))
-            self.stdout.write("\nПРОБЛЕМЫ:")
-            self.stdout.write("  - Yahoo Finance блокирует запросы (429 Too Many Requests)")
-            self.stdout.write("  - Нет интернет-соединения")
-            self.stdout.write("  - Проблемы с DNS/прокси")
-            self.stdout.write("\nРЕШЕНИЯ:")
-            self.stdout.write("  1. Добавить задержки между запросами")
-            self.stdout.write("  2. Использовать прокси для обхода блокировки")
-            self.stdout.write("  3. Использовать альтернативные источники (Bybit для крипты)")
-            self.stdout.write("  4. Увеличить кеширование данных")
-            self.stdout.write("  5. Использовать user-agent заголовки")
-
+            self.stdout.write("\nISSUES:")
+            self.stdout.write("  - Yahoo may rate-limit (429)")
+            self.stdout.write("  - Network / DNS / proxy problems")
+            self.stdout.write("\nMITIGATIONS:")
+            self.stdout.write("  1. Add delays between calls")
+            self.stdout.write("  2. Use a proxy")
+            self.stdout.write("  3. Prefer crypto APIs (Bybit) for digital assets")
+            self.stdout.write("  4. Cache responses longer")
+            self.stdout.write("  5. Keep custom User-Agent headers")

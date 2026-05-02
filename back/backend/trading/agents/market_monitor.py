@@ -35,15 +35,7 @@ CRYPTO_SUFFIXES = ["USDT", "USDC", "BTC", "ETH", "BNB", "BUSD", "DAI", "TUSD", "
 CRYPTO_PAIRS = ["-USD", "-USDT", "-BTC", "-ETH"]
 
 def is_cryptocurrency(ticker: str) -> bool:
-    """
-    Определяет, является ли символ криптовалютой.
-    
-    Args:
-        ticker: Символ (например, 'BTCUSDT', 'AAPL', 'BTC-USD')
-        
-    Returns:
-        True если криптовалюта, False если акция/другое
-    """
+    """Heuristic: crypto pair naming vs equity-style tickers."""
     ticker_upper = ticker.upper().strip()
     
     if any(suffix in ticker_upper for suffix in CRYPTO_SUFFIXES):
@@ -59,13 +51,7 @@ def is_cryptocurrency(ticker: str) -> bool:
     return False
 
 def _setup_yfinance_headers():
-    """
-    Настраивает заголовки для yfinance запросов.
-    Имитирует реальный браузер для обхода блокировок Yahoo Finance.
-    
-    ВАЖНО: yfinance может использовать как requests, так и urllib напрямую.
-    Патчим оба варианта для максимальной совместимости.
-    """
+    """Patch requests/urllib used by yfinance with a browser User-Agent."""
     if not hasattr(requests, '_yfinance_patched'):
         original_get = requests.get
         original_post = requests.post
@@ -444,10 +430,7 @@ class MarketMonitoringAgent:
         raise last_exception or Exception(f"Failed to get data for ticker {self.ticker}. yfinance blocked or unavailable. Try using CSV file in ./data/{self.ticker}.csv")
     
     def _load_from_csv_file(self) -> Optional[pd.DataFrame]:
-        """
-        Загружает данные из CSV файла для backtest.
-        Ищет файлы в формате: {ticker}.csv или {ticker}_{interval}.csv в директории ./data/
-        """
+        """Load OHLCV from ./data/{ticker}.csv (or with _{interval}) if present."""
         data_dirs = ["./data", "./backend/data", "../data", os.path.join(self.cache_path, "data")]
         
         possible_names = [
@@ -543,13 +526,7 @@ class MarketMonitoringAgent:
             return None
     
     def _fetch_from_bybit(self) -> Optional[pd.DataFrame]:
-        """
-        Получает данные через Bybit API.
-        Работает только для криптовалют.
-        
-        Returns:
-            DataFrame с колонками Open, High, Low, Close, Volume или None
-        """
+        """Bybit klines for crypto symbols only; columns Open/High/Low/Close/Volume."""
         if not self.bybit_service:
             return None
         

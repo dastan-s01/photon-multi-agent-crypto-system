@@ -1,6 +1,5 @@
 """
-Фильтр активов для мета-модели
-Определяет, какие активы подходят для торговли с мета-моделью
+Static allow / deny lists for symbols used by meta-model routes.
 """
 import logging
 from typing import Dict, List, Optional, Tuple
@@ -10,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class AssetFilter:
-    """Фильтрует активы на основе их характеристик и исторической производительности"""
+    """Whitelist / blacklist lookup with simple scoring rules."""
     
     def __init__(self):
         self.approved_assets = {
@@ -78,15 +77,7 @@ class AssetFilter:
         }
     
     def is_approved(self, symbol: str) -> bool:
-        """
-        Проверяет, одобрен ли актив для торговли с мета-моделью
-        
-        Args:
-            symbol: Символ актива (например, 'BTCUSDT')
-        
-        Returns:
-            True если актив одобрен, False если нет
-        """
+        """True if symbol is whitelisted and not blacklisted."""
         if symbol in self.blacklisted_assets:
             logger.info(f"Asset {symbol} is blacklisted: {self.blacklisted_assets[symbol]['reason']}")
             return False
@@ -100,15 +91,7 @@ class AssetFilter:
         return False
     
     def get_trading_config(self, symbol: str) -> Dict:
-        """
-        Возвращает конфигурацию торговли для актива
-        
-        Args:
-            symbol: Символ актива
-        
-        Returns:
-            Словарь с параметрами торговли
-        """
+        """Sizing / confidence knobs per asset category."""
         if symbol not in self.approved_assets:
             return {
                 'enabled': False,
@@ -152,22 +135,7 @@ class AssetFilter:
             }
     
     def evaluate_asset(self, symbol: str, historical_performance: Dict) -> Tuple[bool, str]:
-        """
-        Оценивает актив на основе исторической производительности
-        
-        Args:
-            symbol: Символ актива
-            historical_performance: Словарь с метриками производительности
-                {
-                    'return_pct': float,
-                    'win_rate': float,
-                    'trades': int,
-                    'max_drawdown': float
-                }
-        
-        Returns:
-            (is_approved, reason) - одобрен ли актив и причина
-        """
+        """Rule-based gate on win rate, trade count, and return."""
         return_pct = historical_performance.get('return_pct', 0.0)
         win_rate = historical_performance.get('win_rate', 0.0)
         trades = historical_performance.get('trades', 0)
@@ -184,20 +152,18 @@ class AssetFilter:
         return True, f"Asset meets requirements (return: {return_pct:.2f}%, win_rate: {win_rate:.2f}%)"
     
     def get_approved_list(self) -> List[str]:
-        """Возвращает список одобренных активов"""
         return list(self.approved_assets.keys())
-    
+
     def get_blacklisted_list(self) -> List[str]:
-        """Возвращает список заблокированных активов"""
         return list(self.blacklisted_assets.keys())
-    
+
     def add_to_approved(self, symbol: str, performance_data: Dict):
-        """Добавляет актив в белый список"""
+        """Append to whitelist."""
         self.approved_assets[symbol] = performance_data
         logger.info(f"Added {symbol} to approved assets")
     
     def add_to_blacklist(self, symbol: str, reason: str, score: float = None):
-        """Добавляет актив в черный список"""
+        """Append to blacklist."""
         self.blacklisted_assets[symbol] = {
             'reason': reason,
             'score': score
@@ -208,7 +174,7 @@ class AssetFilter:
 _asset_filter = None
 
 def get_asset_filter() -> AssetFilter:
-    """Возвращает глобальный экземпляр фильтра активов"""
+    """Process-wide singleton."""
     global _asset_filter
     if _asset_filter is None:
         _asset_filter = AssetFilter()

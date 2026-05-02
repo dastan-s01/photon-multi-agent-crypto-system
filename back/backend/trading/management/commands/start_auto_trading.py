@@ -1,7 +1,5 @@
 """
-Команда для включения автоматической торговли для пользователя.
-Устанавливает статус "running" в UserSettings, чтобы Celery задача
-run_ai_agents_workflow запускала агентов каждую минуту.
+Set UserSettings.status=running so periodic Celery tasks can pick up the user.
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
@@ -12,50 +10,50 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = "Включает автоматическую торговлю для пользователя (агенты будут работать каждую минуту)"
+    help = "Mark user settings as running (background tasks use this flag)"
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--email",
             type=str,
-            help="Email пользователя",
+            help="User email",
         )
         parser.add_argument(
             "--user-id",
             type=int,
-            help="ID пользователя",
+            help="User id",
         )
         parser.add_argument(
             "--symbol",
             type=str,
             default="BTCUSDT",
-            help="Символ для торговли (по умолчанию: BTCUSDT)",
+            help="Primary symbol (default: BTCUSDT)",
         )
 
     def handle(self, *args, **options):
         email = options.get("email")
-        user_id = options.get("user-id")
+        user_id = options.get("user_id")
         symbol_code = options.get("symbol", "BTCUSDT")
 
         if user_id:
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
-                self.stdout.write(self.style.ERROR(f"Пользователь с ID {user_id} не найден"))
+                self.stdout.write(self.style.ERROR(f"No user with id {user_id}"))
                 return
         elif email:
             try:
                 user = User.objects.get(email=email)
             except User.DoesNotExist:
-                self.stdout.write(self.style.ERROR(f"Пользователь с email {email} не найден"))
+                self.stdout.write(self.style.ERROR(f"No user with email {email}"))
                 return
         else:
             user = User.objects.first()
             if not user:
-                self.stdout.write(self.style.ERROR("Нет пользователей в системе"))
+                self.stdout.write(self.style.ERROR("No users in the database"))
                 return
 
-        self.stdout.write(self.style.SUCCESS(f"Пользователь: {user.email}"))
+        self.stdout.write(self.style.SUCCESS(f"User: {user.email}"))
 
         user_settings, created = UserSettings.objects.get_or_create(
             user=user,
@@ -83,11 +81,11 @@ class Command(BaseCommand):
         )
 
         if symbol_created:
-            self.stdout.write(self.style.SUCCESS(f"✓ Создан символ: {symbol_code}"))
+            self.stdout.write(self.style.SUCCESS(f"✓ Created symbol: {symbol_code}"))
         else:
             symbol.is_active = True
             symbol.save()
-            self.stdout.write(self.style.SUCCESS(f"✓ Активирован символ: {symbol_code}"))
+            self.stdout.write(self.style.SUCCESS(f"✓ Activated symbol: {symbol_code}"))
 
         account, account_created = Account.objects.get_or_create(
             user=user,
@@ -99,22 +97,21 @@ class Command(BaseCommand):
         )
 
         if account_created:
-            self.stdout.write(self.style.SUCCESS(f"✓ Создан счет с балансом: ${account.balance}"))
+            self.stdout.write(self.style.SUCCESS(f"✓ Created account, balance: ${account.balance}"))
         else:
-            self.stdout.write(self.style.SUCCESS(f"✓ Счет существует: ${account.balance}"))
+            self.stdout.write(self.style.SUCCESS(f"✓ Account exists: ${account.balance}"))
 
         self.stdout.write(self.style.SUCCESS("\n" + "="*70))
-        self.stdout.write(self.style.SUCCESS("АВТОМАТИЧЕСКАЯ ТОРГОВЛЯ ВКЛЮЧЕНА"))
+        self.stdout.write(self.style.SUCCESS("AUTO LOOP ENABLED"))
         self.stdout.write(self.style.SUCCESS("="*70))
-        self.stdout.write(f"\nСтатус: {user_settings.get_status_display()}")
-        self.stdout.write(f"Символ: {user_settings.symbol}")
-        self.stdout.write(f"Таймфрейм: {user_settings.timeframe}")
-        self.stdout.write(f"Уровень риска: {user_settings.get_risk_level_display()}")
-        self.stdout.write(f"Порог уверенности: {user_settings.confidence_threshold}%")
-        
-        self.stdout.write(self.style.SUCCESS("\n✓ Агенты будут работать автоматически каждую минуту!"))
-        self.stdout.write("\nДля мониторинга используйте:")
-        self.stdout.write("  docker compose logs -f backend | grep -i 'ai agents workflow\\|decision\\|trade executed'")
-        self.stdout.write("\nИли используйте команду:")
-        self.stdout.write(f"  python manage.py monitor_agents --email {user.email}")
+        self.stdout.write(f"\nStatus: {user_settings.get_status_display()}")
+        self.stdout.write(f"Symbol: {user_settings.symbol}")
+        self.stdout.write(f"Timeframe: {user_settings.timeframe}")
+        self.stdout.write(f"Risk: {user_settings.get_risk_level_display()}")
+        self.stdout.write(f"Confidence threshold: {user_settings.confidence_threshold}%")
 
+        self.stdout.write(self.style.SUCCESS("\n✓ Celery beat will pick this up if configured."))
+        self.stdout.write("\nLogs:")
+        self.stdout.write("  docker compose logs -f backend | grep -i 'ai agents workflow\\|decision\\|trade executed'")
+        self.stdout.write("\nCLI monitor:")
+        self.stdout.write(f"  python manage.py monitor_agents --email {user.email}")

@@ -1,32 +1,35 @@
-# Photon — Multi-Agent Trading System
+# Photon
 
-Multi-agent automated trading system for crypto and stock markets. Three AI agents work together: Market Monitoring → Decision Making → Execution.
+Trading dashboard (Next.js) and REST API (Django): market data, portfolio, simulated orders, Celery workers. Paper / demo execution only.
 
-## Structure
+## Team
+
+| Student ID | Name           |
+|------------|----------------|
+| 230103388  | Dastan Sapiyev |
+| 230103189  | Ernar Shameke  |
+
+## Layout
 
 ```
 photon/
-├── back/
-│   └── backend/   # Django backend
-├── front/   # Next.js frontend
+├── back/backend/
+├── back/docker-compose.yml
+├── front/photon_frontend/
+├── docker-compose.deploy.yml
+├── .env.deploy.example
+├── .github/workflows/
+├── RUN.md
 └── README.md
 ```
 
-## Architecture
+## Stack
 
-- **Market Monitoring Agent** — collects real-time data from Binance, Bybit, yfinance
-- **Decision-Making Agent** — ML (Random Forest, Gradient Boosting), outputs BUY/SELL/HOLD
-- **Execution Agent** — demo trades only, no real orders
+Django 5, DRF, PostgreSQL, Redis, Celery, Next.js 16, Docker.
 
-## Tech Stack
+## Local
 
-- Backend: Django 5, DRF, Celery, PostgreSQL, Redis
-- Frontend: Next.js 16, TypeScript
-- Data: Binance, Bybit, yfinance (no API keys for market data)
-
-## Quick Start
-
-### Backend
+**API**
 
 ```bash
 cd back
@@ -34,16 +37,16 @@ cp backend/env.example backend/.env
 docker compose up --build
 ```
 
-http://localhost:666  
-Swagger: http://localhost:666/api/docs/
-
-### Frontend
+**UI**
 
 ```bash
 cd front/photon_frontend
 pnpm install
-# .env.local: NEXT_PUBLIC_API_URL=http://localhost:666/api
 pnpm dev
 ```
 
-http://localhost:3000
+Details: [RUN.md](RUN.md).
+
+## License
+
+See [front/photon_frontend/LICENSE](front/photon_frontend/LICENSE) if present.

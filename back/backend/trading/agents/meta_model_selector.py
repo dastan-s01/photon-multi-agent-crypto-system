@@ -1,8 +1,5 @@
 """
-Мета-модель для выбора и комбинирования базовых моделей
-Двухслойная архитектура:
-1. Базовые модели (RF, GB, XGBoost)
-2. Мета-уровень для выбора модели по монете и режиму рынка
+Ensemble helper: several sklearn / XGBoost classifiers plus simple regime-based weighting.
 """
 import logging
 import numpy as np
@@ -22,7 +19,7 @@ except ImportError:
 
 
 class MarketRegimeDetector:
-    """Определяет режим рынка: тренд/флэт/паника"""
+    """Label recent bars as trend / flat / volatile (heuristic)."""
     
     def __init__(self):
         self.volatility_threshold_high = 0.03
@@ -30,14 +27,7 @@ class MarketRegimeDetector:
         self.trend_threshold = 0.5
     
     def detect_regime(self, data: pd.DataFrame) -> str:
-        """
-        Определяет режим рынка на основе последних данных
-        
-        Returns:
-            'trend' - тренд
-            'flat' - флэт
-            'volatile' - высокая волатильность/паника
-        """
+        """Return 'trend' | 'flat' | 'volatile'."""
         if data.empty or len(data) < 20:
             return 'flat'
         
@@ -85,7 +75,7 @@ class MarketRegimeDetector:
             return 'flat'
     
     def get_regime_features(self, data: pd.DataFrame) -> np.ndarray:
-        """Извлекает признаки режима рынка"""
+        """Short feature vector for regime context."""
         if data.empty or len(data) < 20:
             return np.array([0.0, 0.0, 0.0, 0.0])
         
@@ -110,14 +100,14 @@ class MarketRegimeDetector:
 
 
 class ModelPerformanceTracker:
-    """Отслеживает производительность моделей по монетам и режимам"""
+    """In-memory rolling stats per symbol / model / regime."""
     
     def __init__(self):
         self.performance: Dict[str, Dict[str, Dict]] = {}  # {symbol: {model_name: {regime: stats}}}
     
     def update(self, symbol: str, model_name: str, regime: str, 
                return_pct: float, trades: int, win_rate: float):
-        """Обновляет статистику производительности"""
+        """Append one evaluation sample."""
         if symbol not in self.performance:
             self.performance[symbol] = {}
         if model_name not in self.performance[symbol]:
@@ -135,7 +125,7 @@ class ModelPerformanceTracker:
         self.performance[symbol][model_name][regime]['win_rates'].append(win_rate)
     
     def get_best_model(self, symbol: str, regime: str) -> Optional[str]:
-        """Возвращает лучшую модель для символа и режима"""
+        """Pick model name with best mean return in that regime."""
         if symbol not in self.performance:
             return None
         
@@ -154,7 +144,7 @@ class ModelPerformanceTracker:
         return best_model
     
     def get_model_weights(self, symbol: str, regime: str) -> Dict[str, float]:
-        """Возвращает веса моделей для ансамбля"""
+        """Normalize positive returns into ensemble weights."""
         if symbol not in self.performance:
             return {}
         
@@ -181,11 +171,11 @@ class ModelPerformanceTracker:
 
 
 class BaseModelFactory:
-    """Создает и обучает базовые модели"""
+    """Construct sklearn / XGBoost classifier templates."""
     
     @staticmethod
     def create_random_forest() -> RandomForestClassifier:
-        """Создает RandomForest с консервативными параметрами"""
+        """RandomForest with modest depth."""
         return RandomForestClassifier(
             n_estimators=100,
             max_depth=10,
@@ -198,7 +188,7 @@ class BaseModelFactory:
     
     @staticmethod
     def create_gradient_boosting() -> GradientBoostingClassifier:
-        """Создает GradientBoosting с консервативными параметрами для крипты"""
+        """GradientBoosting with regularization-friendly defaults."""
         return GradientBoostingClassifier(
             n_estimators=100,
             learning_rate=0.05,
@@ -212,7 +202,7 @@ class BaseModelFactory:
     
     @staticmethod
     def create_xgboost():
-        """Создает XGBoost с консервативными параметрами"""
+        """XGBoost classifier if the optional dependency is installed."""
         if not XGBOOST_AVAILABLE:
             return None
         
@@ -229,18 +219,19 @@ class BaseModelFactory:
 
 
 class MetaModelSelector:
-    """Мета-модель для выбора и комбинирования базовых моделей"""
-    
+    """Train per-symbol base models and blend predictions with regime-aware weights."""
+
     def __init__(self):
         self.regime_detector = MarketRegimeDetector()
         self.performance_tracker = ModelPerformanceTracker()
         self.base_models: Dict[str, Dict] = {}  # {symbol: {model_name: model}}
         self.scalers: Dict[str, StandardScaler] = {}  # {symbol: scaler}
         self.model_factory = BaseModelFactory()
+        self.static_model_selection: Dict[str, str] = {}
         
     
     def train_base_models(self, symbol: str, X: np.ndarray, y: np.ndarray):
-        """Обучает все базовые модели для символа"""
+        """Fit RF, GB, and optionally XGB on scaled features."""
         if symbol not in self.base_models:
             self.base_models[symbol] = {}
         
@@ -268,12 +259,7 @@ class MetaModelSelector:
     
     def predict_ensemble(self, symbol: str, features: np.ndarray, 
                         data: pd.DataFrame, use_regime: bool = True) -> Tuple[int, float]:
-        """
-        Делает предсказание через ансамбль моделей
-        
-        Returns:
-            (prediction, confidence) - предсказание и уверенность
-        """
+        """Weighted vote across base models → (class, score)."""
         if symbol not in self.base_models or not self.base_models[symbol]:
             logger.warning(f"No models trained for {symbol}")
             return None, 0.0
@@ -349,23 +335,18 @@ class MetaModelSelector:
     
     def predict_ensemble_with_regime(self, symbol: str, features: np.ndarray, 
                                     data: pd.DataFrame, use_regime: bool = True) -> Tuple[int, float, str]:
-        """
-        Делает предсказание через ансамбль моделей и возвращает также режим рынка
-        
-        Returns:
-            (prediction, confidence, regime) - предсказание, уверенность и режим рынка
-        """
+        """Same as `predict_ensemble` plus regime string."""
         prediction, confidence = self.predict_ensemble(symbol, features, data, use_regime)
         regime = self.regime_detector.detect_regime(data) if use_regime else 'flat'
         return prediction, confidence, regime
     
     def update_performance(self, symbol: str, model_name: str, regime: str,
                           return_pct: float, trades: int, win_rate: float):
-        """Обновляет статистику производительности модели"""
+        """Forward to performance tracker."""
         self.performance_tracker.update(symbol, model_name, regime, return_pct, trades, win_rate)
     
     def get_recommended_model(self, symbol: str, regime: str) -> str:
-        """Возвращает рекомендуемую модель для символа и режима"""
+        """Best tracked model or static fallback."""
         best_model = self.performance_tracker.get_best_model(symbol, regime)
         if best_model:
             return best_model

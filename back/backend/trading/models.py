@@ -3,7 +3,7 @@ from django.db import models
 
 
 class Symbol(models.Model):
-    """Модель для отслеживаемых торговых символов (акции, криптовалюты и т.д.)"""
+    """Tradable symbol tracked per user (equities, crypto, etc.)."""
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -24,7 +24,7 @@ class Symbol(models.Model):
 
 
 class MarketData(models.Model):
-    """Модель для хранения данных рынка в реальном времени"""
+    """Time-series market snapshot for a symbol."""
     symbol = models.ForeignKey(
         Symbol,
         on_delete=models.CASCADE,
@@ -51,11 +51,11 @@ class MarketData(models.Model):
 
 
 class TradingDecision(models.Model):
-    """Модель для хранения решений агента Decision-Making Agent"""
+    """Decision produced by the decision-making agent."""
     DECISION_CHOICES = [
-        ("BUY", "Купить"),
-        ("SELL", "Продать"),
-        ("HOLD", "Держать"),
+        ("BUY", "Buy"),
+        ("SELL", "Sell"),
+        ("HOLD", "Hold"),
     ]
 
     user = models.ForeignKey(
@@ -93,7 +93,7 @@ class TradingDecision(models.Model):
 
 
 class AgentStatus(models.Model):
-    """Модель для отслеживания статуса агентов"""
+    """Runtime status row per user and agent type."""
     AGENT_TYPES = [
         ("MARKET_MONITOR", "Market Monitoring Agent"),
         ("DECISION_MAKER", "Decision-Making Agent"),
@@ -101,10 +101,10 @@ class AgentStatus(models.Model):
     ]
 
     STATUS_CHOICES = [
-        ("RUNNING", "Работает"),
-        ("STOPPED", "Остановлен"),
-        ("ERROR", "Ошибка"),
-        ("IDLE", "Ожидает"),
+        ("RUNNING", "Running"),
+        ("STOPPED", "Stopped"),
+        ("ERROR", "Error"),
+        ("IDLE", "Idle"),
     ]
 
     user = models.ForeignKey(
@@ -128,7 +128,7 @@ class AgentStatus(models.Model):
 
 
 class Account(models.Model):
-    """Модель для хранения информации о счете пользователя"""
+    """Simulated cash / margin account for a user."""
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -155,7 +155,7 @@ class Account(models.Model):
 
 
 class Position(models.Model):
-    """Модель для открытых позиций"""
+    """Open position in the paper portfolio."""
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -185,24 +185,24 @@ class Position(models.Model):
 
     @property
     def pnl(self):
-        """Рассчитывает прибыль/убыток"""
+        """Unrealized P&L when open and priced."""
         if not self.current_price or not self.is_open:
             return None
         return (self.current_price - self.entry_price) * self.quantity
 
     @property
     def pnl_percent(self):
-        """Рассчитывает процент прибыли/убытка"""
+        """Unrealized return % when open and priced."""
         if not self.entry_price or not self.current_price or not self.is_open:
             return None
         return ((self.current_price - self.entry_price) / self.entry_price) * 100
 
 
 class Trade(models.Model):
-    """Модель для выполненных сделок"""
+    """Executed (demo) trade record."""
     ACTION_CHOICES = [
-        ("BUY", "Купить"),
-        ("SELL", "Продать"),
+        ("BUY", "Buy"),
+        ("SELL", "Sell"),
     ]
 
     user = models.ForeignKey(
@@ -245,11 +245,11 @@ class Trade(models.Model):
 
 
 class AgentLog(models.Model):
-    """Модель для логов агентов"""
+    """Structured log line for an agent."""
     LEVEL_CHOICES = [
-        ("info", "Информация"),
-        ("warning", "Предупреждение"),
-        ("error", "Ошибка"),
+        ("info", "Information"),
+        ("warning", "Warning"),
+        ("error", "Error"),
     ]
 
     agent_status = models.ForeignKey(
@@ -272,7 +272,7 @@ class AgentLog(models.Model):
 
 
 class Message(models.Model):
-    """Модель для сообщений между агентами"""
+    """Inter-agent message envelope."""
     MESSAGE_TYPES = [
         ("MARKET_SNAPSHOT", "Market Snapshot"),
         ("TRADE_DECISION", "Trade Decision"),
@@ -312,11 +312,11 @@ class Message(models.Model):
 
 
 class UserSettings(models.Model):
-    """Модель для хранения настроек пользователя"""
+    """User-facing simulation and model preferences."""
     STATUS_CHOICES = [
-        ("running", "Запущена"),
-        ("paused", "Приостановлена"),
-        ("stopped", "Остановлена"),
+        ("running", "Running"),
+        ("paused", "Paused"),
+        ("stopped", "Stopped"),
     ]
 
     SPEED_CHOICES = [
@@ -327,17 +327,17 @@ class UserSettings(models.Model):
     ]
 
     TIMEFRAME_CHOICES = [
-        ("5m", "5 минут"),
-        ("15m", "15 минут"),
-        ("1h", "1 час"),
-        ("4h", "4 часа"),
-        ("1d", "1 день"),
+        ("5m", "5 minutes"),
+        ("15m", "15 minutes"),
+        ("1h", "1 hour"),
+        ("4h", "4 hours"),
+        ("1d", "1 day"),
     ]
 
     RISK_LEVEL_CHOICES = [
-        ("low", "Низкий"),
-        ("medium", "Средний"),
-        ("high", "Высокий"),
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
     ]
 
     user = models.OneToOneField(

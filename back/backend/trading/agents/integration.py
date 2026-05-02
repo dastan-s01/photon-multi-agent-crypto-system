@@ -1,11 +1,5 @@
 """
-Интеграция AI агентов с Django моделями
-
-Этот модуль предоставляет адаптеры для интеграции агентов с:
-- Message моделью (коммуникация между агентами)
-- AgentLog моделью (логирование)
-- AgentStatus моделью (статусы агентов)
-- UserSettings моделью (настройки пользователя)
+Bridges in-process agent classes to Django models (logs, messages, status, settings).
 """
 
 import logging
@@ -33,23 +27,11 @@ logger = logging.getLogger(__name__)
 
 
 class DjangoAgentAdapter:
-    """
-    Адаптер для интеграции AI агентов с Django моделями.
-    
-    Обеспечивает:
-    - Логирование действий агентов
-    - Сохранение сообщений между агентами
-    - Обновление статусов агентов
-    - Использование настроек пользователя
-    """
-    
+    """Persist agent activity: AgentLog, Message, AgentStatus, UserSettings."""
+
     def __init__(self, user: User, agent_type: str):
         """
-        Инициализация адаптера.
-        
-        Args:
-            user: Пользователь Django
-            agent_type: Тип агента ("MARKET_MONITOR", "DECISION_MAKER", "EXECUTION")
+        `agent_type`: MARKET_MONITOR | DECISION_MAKER | EXECUTION
         """
         self.user = user
         self.agent_type = agent_type
@@ -72,14 +54,7 @@ class DjangoAgentAdapter:
         )
     
     def log(self, level: str, message: str, metadata: Optional[Dict] = None):
-        """
-        Логирует действие агента.
-        
-        Args:
-            level: Уровень лога ("info", "warning", "error")
-            message: Сообщение лога
-            metadata: Дополнительные метаданные
-        """
+        """Write AgentLog + Python logger line."""
         try:
             AgentLog.objects.create(
                 agent_status=self.agent_status,
@@ -99,17 +74,7 @@ class DjangoAgentAdapter:
         message_type: str,
         payload: Dict[str, Any]
     ) -> Message:
-        """
-        Отправляет сообщение другому агенту.
-        
-        Args:
-            to_agent: Тип агента-получателя
-            message_type: Тип сообщения ("MARKET_SNAPSHOT", "TRADE_DECISION", "EXECUTION_REPORT")
-            payload: Данные сообщения
-        
-        Returns:
-            Созданный объект Message
-        """
+        """Create Message row (`MARKET_SNAPSHOT`, `TRADE_DECISION`, ...)."""
         try:
             message = Message.objects.create(
                 user=self.user,
@@ -125,13 +90,7 @@ class DjangoAgentAdapter:
             raise
     
     def update_status(self, status: str, metadata: Optional[Dict] = None):
-        """
-        Обновляет статус агента.
-        
-        Args:
-            status: Новый статус ("RUNNING", "IDLE", "STOPPED", "ERROR")
-            metadata: Дополнительные метаданные
-        """
+        """Update AgentStatus and optional JSON metadata."""
         try:
             self.agent_status.status = status
             self.agent_status.last_activity = timezone.now()
@@ -146,20 +105,17 @@ class DjangoAgentAdapter:
             logger.error(f"Error updating agent status: {e}")
     
     def get_user_settings(self) -> UserSettings:
-        """Возвращает настройки пользователя."""
         return self.user_settings
-    
+
     def get_risk_tolerance(self) -> str:
-        """Возвращает уровень риска из настроек."""
         return self.user_settings.risk_level or "medium"
-    
+
     def get_confidence_threshold(self) -> float:
-        """Возвращает порог уверенности из настроек."""
         return float(self.user_settings.confidence_threshold or 0.55)
 
 
 class MarketAgentIntegration:
-    """Интеграция MarketMonitoringAgent с Django моделями."""
+    """Run market monitor + persist MarketData + enqueue snapshot for decision step."""
     
     def __init__(self, user: User):
         self.user = user
@@ -171,17 +127,7 @@ class MarketAgentIntegration:
         market_agent,
         save_to_db: bool = True
     ) -> Dict:
-        """
-        Обрабатывает данные рынка и сохраняет в БД.
-        
-        Args:
-            symbol: Объект Symbol из Django
-            market_agent: Экземпляр MarketMonitoringAgent
-            save_to_db: Сохранять ли данные в MarketData
-        
-        Returns:
-            Стандартизированное сообщение для Decision Agent
-        """
+        """Fetch/process quote, optionally insert MarketData, return payload for decision agent."""
         try:
             self.adapter.update_status("RUNNING")
             self.adapter.log("info", f"Processing market data for {symbol.symbol}")
@@ -221,7 +167,7 @@ class MarketAgentIntegration:
 
 
 class DecisionAgentIntegration:
-    """Интеграция DecisionMakingAgent с Django моделями."""
+    """Run decision step and store TradingDecision."""
     
     def __init__(self, user: User):
         self.user = user
@@ -235,18 +181,7 @@ class DecisionAgentIntegration:
         decision_agent
     ) -> TradingDecision:
         """
-        Принимает решение и сохраняет в БД.
-        
-        ВАЖНО: Если решение SELL, но нет открытых позиций - автоматически меняет на HOLD.
-        
-        Args:
-            symbol: Объект Symbol
-            market_data_obj: Объект MarketData (может быть None)
-            market_message: Сообщение от Market Agent
-            decision_agent: Экземпляр DecisionMakingAgent
-        
-        Returns:
-            Созданный объект TradingDecision
+        Persist model output as TradingDecision. SELL without an open long is coerced to HOLD upstream.
         """
         try:
             self.adapter.update_status("RUNNING")
@@ -304,7 +239,7 @@ class DecisionAgentIntegration:
 
 
 class ExecutionAgentIntegration:
-    """Интеграция ExecutionAgent с Django моделями."""
+    """Apply simulated execution result to Trade / Position tables."""
     
     def __init__(self, user: User):
         self.user = user
@@ -317,18 +252,7 @@ class ExecutionAgentIntegration:
         execution_agent,
         execution_result: Dict
     ) -> Trade:
-        """
-        Выполняет сделку и сохраняет в БД.
-        
-        Args:
-            symbol: Объект Symbol
-            decision_obj: Объект TradingDecision
-            execution_agent: Экземпляр ExecutionAgent
-            execution_result: Результат выполнения от ExecutionAgent
-        
-        Returns:
-            Созданный объект Trade
-        """
+        """Create Trade when `execution_result['status'] == 'executed'`."""
         try:
             self.adapter.update_status("RUNNING")
             self.adapter.log("info", f"Executing trade: {execution_result.get('action')} {symbol.symbol}")

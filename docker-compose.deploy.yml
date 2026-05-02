@@ -1,0 +1,115 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-photon}
+      POSTGRES_USER: ${POSTGRES_USER:-photon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-photon}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "15432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-photon} -d ${POSTGRES_DB:-photon}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./back/backend
+    command: >
+      bash -c "until python -c 'import psycopg2; psycopg2.connect(\"host=postgres dbname=${POSTGRES_DB:-photon} user=${POSTGRES_USER:-photon} password=${POSTGRES_PASSWORD:-photon}\")' 2>/dev/null; do
+        echo 'Waiting for PostgreSQL...';
+        sleep 2;
+      done &&
+      python manage.py migrate &&
+      python manage.py collectstatic --noinput &&
+      gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 300 --access-logfile - --error-logfile - --log-level info"
+    restart: unless-stopped
+    env_file:
+      - ./back/backend/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    ports:
+      - "666:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery:
+    build:
+      context: ./back/backend
+    command: celery -A config worker -l info
+    restart: unless-stopped
+    env_file:
+      - ./back/backend/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build:
+      context: ./back/backend
+    command: celery -A config beat -l info
+    restart: unless-stopped
+    env_file:
+      - ./back/backend/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./front/photon_frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://91.147.104.165:666/api}
+    container_name: photon-frontend
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: production
+      PORT: "3002"
+      API_URL_SERVER: http://backend:8000/api
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  postgres_data:

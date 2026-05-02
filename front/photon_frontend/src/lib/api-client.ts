@@ -198,6 +198,7 @@ class ApiClient {
   async getDashboardOverview() {
     return await this.request<{
       balance: number;
+      initialBalance: number;
       todayPnL: number;
       todayTradesCount: number;
       winRate: number;
@@ -774,9 +775,13 @@ class ApiClient {
     retrain_interval?: number;
     use_ensemble?: boolean;
     use_regime_switching?: boolean;
+    /** When true (default), paper account is reset to final backtest equity (clears demo trades/positions). */
+    apply_to_account?: boolean;
   }) {
     return await this.request<{
       success: boolean;
+      account_synced?: boolean;
+      account_sync_error?: string;
       symbol: string;
       initial_balance: number;
       final_balance: number;

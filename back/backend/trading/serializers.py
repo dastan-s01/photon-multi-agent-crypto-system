@@ -79,10 +79,10 @@ class TradingDecisionSerializer(serializers.ModelSerializer):
     
     def get_status(self, obj):
         """
-        Определяет статус решения:
-        - executed: если есть соответствующая сделка (Trade)
-        - pending: если решение HOLD
-        - pending: если решение BUY/SELL но нет сделки
+        Decision status:
+        - executed: matching Trade exists
+        - completed: HOLD
+        - pending: BUY/SELL but no Trade yet
         """
         if obj.decision == "HOLD":
             return "completed"
@@ -99,7 +99,7 @@ class TradingDecisionSerializer(serializers.ModelSerializer):
         return "executed" if trade else "pending"
     
     def get_executed_at(self, obj):
-        """Возвращает время исполнения если есть соответствующая сделка"""
+        """Execution timestamp when a matching Trade exists."""
         if obj.decision == "HOLD":
             return obj.created_at
         
@@ -178,13 +178,13 @@ class PositionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "openedAt", "closedAt"]
 
     def get_pnl(self, obj):
-        """Рассчитывает P&L"""
+        """Compute unrealized P&L."""
         if obj.is_open and obj.current_price:
             return float((obj.current_price - obj.entry_price) * obj.quantity)
         return None
 
     def get_pnlPercent(self, obj):
-        """Рассчитывает процент P&L"""
+        """Compute unrealized P&L percent."""
         if obj.is_open and obj.current_price and obj.entry_price:
             return float(((obj.current_price - obj.entry_price) / obj.entry_price) * 100)
         return None
@@ -224,7 +224,7 @@ class AgentLogSerializer(serializers.ModelSerializer):
 
 
 class AgentDetailSerializer(serializers.ModelSerializer):
-    """Расширенный сериализатор для детальной информации об агенте"""
+    """Rich agent payload for the dashboard UI."""
     type = serializers.SerializerMethodField()
     name = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
@@ -253,7 +253,7 @@ class AgentDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_type(self, obj):
-        """Преобразует AGENT_TYPE в формат фронтенда"""
+        """Map AGENT_TYPE to frontend enum."""
         mapping = {
             "MARKET_MONITOR": "market",
             "DECISION_MAKER": "decision",
@@ -262,11 +262,11 @@ class AgentDetailSerializer(serializers.ModelSerializer):
         return mapping.get(obj.agent_type, "market")
 
     def get_name(self, obj):
-        """Возвращает название агента"""
+        """Human-readable agent label."""
         return obj.get_agent_type_display()
 
     def get_status(self, obj):
-        """Преобразует STATUS в формат фронтенда"""
+        """Map backend status to frontend enum."""
         mapping = {
             "RUNNING": "active",
             "IDLE": "idle",
@@ -276,7 +276,7 @@ class AgentDetailSerializer(serializers.ModelSerializer):
         return mapping.get(obj.status, "idle")
 
     def get_lastAction(self, obj):
-        """Получает последнее действие в зависимости от типа агента"""
+        """Short summary of the latest agent-specific activity."""
         if obj.agent_type == "DECISION_MAKER":
             last_decision = TradingDecision.objects.filter(
                 user=obj.user
@@ -311,7 +311,7 @@ class AgentDetailSerializer(serializers.ModelSerializer):
         return "No actions yet"
 
     def get_messagesProcessed(self, obj):
-        """Считает количество сообщений, обработанных агентом"""
+        """Count Message rows involving this agent type."""
         from trading.models import Message
         return Message.objects.filter(
             user=obj.user,
@@ -320,12 +320,12 @@ class AgentDetailSerializer(serializers.ModelSerializer):
         ).count()
 
     def get_logs(self, obj):
-        """Получает последние логи агента"""
+        """Latest log lines for this agent."""
         logs = obj.logs.order_by("-timestamp")[:10]
         return AgentLogSerializer(logs, many=True).data
     
     def get_recentDecisions(self, obj):
-        """Получает последние решения для Decision Maker"""
+        """Recent TradingDecision rows for the decision agent."""
         if obj.agent_type != "DECISION_MAKER":
             return []
         
@@ -347,7 +347,7 @@ class AgentDetailSerializer(serializers.ModelSerializer):
         return result
     
     def get_currentState(self, obj):
-        """Получает текущее состояние агента"""
+        """Structured state blob for the UI."""
         from trading.models import UserSettings, Trade
         
         state = {
@@ -383,7 +383,7 @@ class AgentDetailSerializer(serializers.ModelSerializer):
         return state
     
     def get_explorationMode(self, obj):
-        """Проверяет включен ли exploration mode"""
+        """Whether low-data exploration mode is active."""
         if obj.agent_type != "DECISION_MAKER":
             return None
         
@@ -421,7 +421,7 @@ class MessageSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "timestamp", "from_agent_type", "to_agent_type"]
 
     def get_from_agent_type(self, obj):
-        """Преобразует from_agent в формат фронтенда"""
+        """Map from_agent to frontend enum."""
         mapping = {
             "MARKET_MONITOR": "market",
             "DECISION_MAKER": "decision",
@@ -430,7 +430,7 @@ class MessageSerializer(serializers.ModelSerializer):
         return mapping.get(obj.from_agent, "market")
 
     def get_to_agent_type(self, obj):
-        """Преобразует to_agent в формат фронтенда"""
+        """Map to_agent to frontend enum."""
         mapping = {
             "MARKET_MONITOR": "market",
             "DECISION_MAKER": "decision",
@@ -439,7 +439,7 @@ class MessageSerializer(serializers.ModelSerializer):
         return mapping.get(obj.to_agent, "market")
 
     def to_representation(self, instance):
-        """Кастомное представление для соответствия фронтенду"""
+        """Shape payload to match the frontend contract."""
         return {
             "id": str(instance.id),
             "timestamp": instance.timestamp,
@@ -451,7 +451,7 @@ class MessageSerializer(serializers.ModelSerializer):
 
 
 class UserSettingsSerializer(serializers.ModelSerializer):
-    """Сериализатор для настроек пользователя"""
+    """User simulation settings for the UI."""
     dataProvider = serializers.CharField(source="data_provider", required=False)
     historyLength = serializers.CharField(source="history_length", required=False)
     modelType = serializers.CharField(source="model_type", required=False)
@@ -519,7 +519,7 @@ class UserSettingsSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def to_representation(self, instance):
-        """Преобразует данные для соответствия фронтенду"""
+        """CamelCase-style dict for the frontend."""
         data = super().to_representation(instance)
         return {
             "status": data["status"],

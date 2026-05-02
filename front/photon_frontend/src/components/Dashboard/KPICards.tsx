@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Wallet, TrendingUp, Target, Zap } from 'lucide-react';
+import { Wallet, TrendingUp, Target, ListOrdered } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface KPICardProps {
@@ -49,12 +49,13 @@ function KPICard({ icon: Icon, label, value, change, changeType = 'neutral', val
 
 interface KPICardsProps {
   balance: number;
+  initialBalance: number;
   todayPnL: number;
   winRate: number;
-  agentsStatus: string;
+  todayTradesCount: number;
 }
 
-export function KPICards({ balance, todayPnL, winRate, agentsStatus }: KPICardsProps) {
+export function KPICards({ balance, initialBalance, todayPnL, winRate, todayTradesCount }: KPICardsProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -67,9 +68,9 @@ export function KPICards({ balance, todayPnL, winRate, agentsStatus }: KPICardsP
     return `${value.toFixed(1)}%`;
   };
 
-  const initialBalance = 10000;
-  const balanceChange = balance - initialBalance;
-  const balanceChangePercent = (balanceChange / initialBalance) * 100;
+  const baseline = initialBalance > 0 ? initialBalance : 10_000;
+  const balanceChange = balance - baseline;
+  const balanceChangePercent = (balanceChange / baseline) * 100;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -98,10 +99,10 @@ export function KPICards({ balance, todayPnL, winRate, agentsStatus }: KPICardsP
         changeType="positive"
       />
       <KPICard
-        icon={Zap}
-        label="Agents Status"
-        value={agentsStatus}
-        changeType="positive"
+        icon={ListOrdered}
+        label="Trades today"
+        value={String(todayTradesCount)}
+        changeType="neutral"
       />
     </div>
   );

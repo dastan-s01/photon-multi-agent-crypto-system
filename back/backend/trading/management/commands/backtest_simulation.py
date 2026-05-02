@@ -1,8 +1,8 @@
 """
-Команда для симуляции торговли на исторических данных с ускорением времени.
+A command for simulating trading on historical data with time acceleration.
 
-Симулирует работу агентов на исторических данных, где 1 секунда = 1 час.
-Это позволяет быстро протестировать модель на реальных данных за месяцы.
+Simulates the work of agents on historical data, where 1 second = 1 hour.
+This allows you to quickly test the model on months of real data.
 """
 import time
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -25,48 +25,48 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = "Симуляция торговли на исторических данных с ускорением времени (1 сек = 1 час)"
+help = "Simulation of trading on historical data with time acceleration (1 sec = 1 hour)"
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--email",
             type=str,
             required=True,
-            help="Email пользователя для симуляции",
+help="User email for simulation",
         )
         parser.add_argument(
             "--symbol",
             type=str,
             default="BTCUSDT",
-            help="Символ для симуляции (по умолчанию: BTCUSDT)",
+help="Symbol for simulation (default: BTCUSDT)",
         )
         parser.add_argument(
             "--start-date",
             type=str,
-            help="Начальная дата в формате YYYY-MM-DD (по умолчанию: 1 месяц назад)",
+help="Start date in YYYY-MM-DD format (default: 1 month ago)",
         )
         parser.add_argument(
             "--end-date",
             type=str,
-            help="Конечная дата в формате YYYY-MM-DD (по умолчанию: сегодня)",
+help="End date in YYYY-MM-DD format (default: today)",
         )
         parser.add_argument(
             "--interval",
             type=str,
             default="1h",
-            help="Интервал данных (1h, 4h, 1d) - по умолчанию: 1h",
+help="Data interval (1h, 4h, 1d) - default: 1h",
         )
         parser.add_argument(
             "--speed",
             type=float,
             default=1.0,
-            help="Скорость симуляции (секунды на интервал) - по умолчанию: 1.0",
+help="Simulation speed (seconds per interval) - default: 1.0",
         )
         parser.add_argument(
             "--initial-balance",
             type=Decimal,
             default=Decimal("10000.00"),
-            help="Начальный баланс (по умолчанию: 10000.00)",
+help="Initial balance (default: 10000.00)",
         )
 
     def handle(self, *args, **options):
@@ -87,19 +87,19 @@ class Command(BaseCommand):
             start_date = end_date - timedelta(days=30)
 
         self.stdout.write(self.style.SUCCESS("=" * 70))
-        self.stdout.write(self.style.SUCCESS("СИМУЛЯЦИЯ НА ИСТОРИЧЕСКИХ ДАННЫХ"))
+self.stdout.write(self.style.SUCCESS("SIMULATION ON HISTORICAL DATA"))
         self.stdout.write(self.style.SUCCESS("=" * 70))
-        self.stdout.write(f"Пользователь: {email}")
-        self.stdout.write(f"Символ: {symbol_code}")
-        self.stdout.write(f"Период: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}")
-        self.stdout.write(f"Интервал: {interval}")
-        self.stdout.write(f"Скорость: {speed} сек/интервал (1 сек = 1 час)")
-        self.stdout.write(f"Начальный баланс: ${initial_balance}\n")
+self.stdout.write(f"User: {email}")
+self.stdout.write(f"Symbol: {symbol_code}")
+self.stdout.write(f"Period: {start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}")
+self.stdout.write(f"Interval: {interval}")
+self.stdout.write(f"Speed: {speed} sec/interval (1 sec = 1 hour)")
+self.stdout.write(f"Initial balance: ${initial_balance}\n")
 
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            self.stdout.write(self.style.ERROR(f"Пользователь с email '{email}' не найден"))
+self.stdout.write(self.style.ERROR(f"User with email '{email}' not found"))
             return
 
         symbol, _ = Symbol.objects.get_or_create(
@@ -120,7 +120,7 @@ class Command(BaseCommand):
         account.free_cash = initial_balance
         account.save()
 
-        self.stdout.write("\n[1/4] Загрузка исторических данных...")
+self.stdout.write("\n[1/4] Loading historical data...")
         try:
             market_agent = MarketMonitoringAgent(
                 ticker=symbol_code,
@@ -140,7 +140,7 @@ class Command(BaseCommand):
                 historical_data = result
             
             if historical_data is None or historical_data.empty:
-                self.stdout.write(self.style.ERROR("Не удалось загрузить исторические данные"))
+self.stdout.write(self.style.ERROR("Failed to load historical data"))
                 return
             
             if 'timestamp' in historical_data.columns:
@@ -149,13 +149,13 @@ class Command(BaseCommand):
             if not isinstance(historical_data.index, pd.DatetimeIndex):
                 historical_data.index = pd.to_datetime(historical_data.index)
             
-            self.stdout.write(f"\nОтладка: Данные содержат {len(historical_data)} записей")
+self.stdout.write(f"\nDebug: Data contains {len(historical_data)} records")
             if len(historical_data) > 0:
                 first_date = historical_data.index[0]
                 last_date = historical_data.index[-1]
-                self.stdout.write(f"Первая дата в данных: {first_date}")
-                self.stdout.write(f"Последняя дата в данных: {last_date}")
-                self.stdout.write(f"Запрошенный период: {start_date} - {end_date}")
+self.stdout.write(f"First date in data: {first_date}")
+self.stdout.write(f"Last date in data: {last_date}")
+self.stdout.write(f"Requested period: {start_date} - {end_date}")
             
             import numpy as np
             start_ts = np.datetime64(start_date)
@@ -168,30 +168,30 @@ class Command(BaseCommand):
             
             if filtered_data.empty:
                 self.stdout.write(self.style.WARNING(
-                    f"\n⚠ Нет данных в указанном периоде ({start_date} - {end_date}). "
-                    f"Используем все доступные данные ({first_date} - {last_date})."
+f"\n⚠ There is no data in the specified period ({start_date} - {end_date}). "
+f"Use all available data ({first_date} - {last_date})."
                 ))
                 historical_data = historical_data
             else:
                 historical_data = filtered_data
                 self.stdout.write(self.style.SUCCESS(
-                    f"✓ Отфильтровано: {len(historical_data)} записей в запрошенном периоде"
+f"✓ Filtered: {len(historical_data)} records in the requested period"
                 ))
             
             if historical_data.empty:
-                self.stdout.write(self.style.ERROR("Нет данных для симуляции"))
+self.stdout.write(self.style.ERROR("No data for simulation"))
                 return
             
             self.stdout.write(self.style.SUCCESS(
-                f"✓ Загружено {len(historical_data)} записей "
+f"✓ Loaded {len(historical_data)} records"
                 f"({historical_data.index[0]} - {historical_data.index[-1]})"
             ))
             
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Ошибка загрузки данных: {e}"))
+self.stdout.write(self.style.ERROR(f"Error loading data: {e}"))
             return
 
-        self.stdout.write("\n[2/4] Инициализация агентов...")
+self.stdout.write("\n[2/4] Initializing agents...")
         decision_agent = DecisionMakingAgent(
             model_type="random_forest",
             risk_tolerance="medium",
@@ -215,7 +215,7 @@ class Command(BaseCommand):
         decision_integration = DecisionAgentIntegration(user)
         execution_integration = ExecutionAgentIntegration(user)
         
-        self.stdout.write(self.style.SUCCESS("✓ Агенты инициализированы"))
+self.stdout.write(self.style.SUCCESS("✓ Agents initialized"))
 
         stats = {
             "total_decisions": 0,
@@ -230,8 +230,8 @@ class Command(BaseCommand):
             "losing_trades": 0,
         }
 
-        self.stdout.write("\n[3/4] Запуск симуляции...")
-        self.stdout.write(self.style.WARNING("Нажмите Ctrl+C для остановки\n"))
+self.stdout.write("\n[3/4] Starting simulation...")
+self.stdout.write(self.style.WARNING("Press Ctrl+C to stop\n"))
         
         start_time = time.time()
         last_display_time = start_time
@@ -248,11 +248,11 @@ class Command(BaseCommand):
                     
                     self.stdout.write(
                         f"\r[{idx+1}/{len(historical_data)}] "
-                        f"Прогресс: {progress:.1f}% | "
-                        f"Время: {timestamp.strftime('%Y-%m-%d %H:%M')} | "
-                        f"Осталось: {remaining:.0f}с | "
-                        f"Баланс: ${account.balance:.2f} | "
-                        f"Сделок: {stats['total_trades']} | "
+f"Progress: {progress:.1f}% | "
+f"Time: {timestamp.strftime('%Y-%m-%d %H:%M')} | "
+f"Remaining: {remaining:.0f}s | "
+f"Balance: ${account.balance:.2f} | "
+f"Trades: {stats['total_trades']} | "
                         f"PnL: ${stats['total_pnl']:+.2f}",
                         ending=""
                     )
@@ -269,7 +269,7 @@ class Command(BaseCommand):
                         timestamp_aware = timestamp_aware.replace(tzinfo=dt_timezone.utc)
                 
                 def get_value(series, key, default=0):
-                    """Безопасное извлечение значения из Series"""
+"""Safely extracting a value from a Series"""
                     try:
                         if key in series.index:
                             val = series[key]
@@ -291,7 +291,7 @@ class Command(BaseCommand):
                     return default
                 
                 def get_str_value(series, key, default=""):
-                    """Безопасное извлечение строкового значения из Series"""
+"""Safely extracting a string value from a Series"""
                     try:
                         if key in series.index:
                             val = series[key]
@@ -403,7 +403,7 @@ class Command(BaseCommand):
                                         stats["losing_trades"] += 1
                 
                 except Exception as e:
-                    self.stdout.write(self.style.WARNING(f"\nОшибка на шаге {idx+1}: {e}"))
+self.stdout.write(self.style.WARNING(f"\nError at step {idx+1}: {e}"))
                     continue
                 
                 account.refresh_from_db()
@@ -412,9 +412,9 @@ class Command(BaseCommand):
                     time.sleep(speed)
         
         except KeyboardInterrupt:
-            self.stdout.write(self.style.WARNING("\n\nСимуляция остановлена пользователем"))
+self.stdout.write(self.style.WARNING("\n\nSimulation stopped by user"))
         
-        self.stdout.write(self.style.SUCCESS("\n\n[4/4] Финальная статистика:"))
+self.stdout.write(self.style.SUCCESS("\n\n[4/4] Final statistics:"))
         self.stdout.write(self.style.SUCCESS("=" * 70))
         
         account.refresh_from_db()
@@ -422,25 +422,25 @@ class Command(BaseCommand):
         total_return = final_balance - initial_balance
         total_return_pct = (total_return / initial_balance) * 100 if initial_balance > 0 else 0
         
-        self.stdout.write(f"Начальный баланс: ${initial_balance:.2f}")
-        self.stdout.write(f"Финальный баланс: ${final_balance:.2f}")
-        self.stdout.write(f"Общая прибыль/убыток: ${total_return:+.2f} ({total_return_pct:+.2f}%)")
-        self.stdout.write(f"\nРешения:")
-        self.stdout.write(f"  Всего: {stats['total_decisions']}")
+self.stdout.write(f"Initial balance: ${initial_balance:.2f}")
+self.stdout.write(f"Final balance: ${final_balance:.2f}")
+self.stdout.write(f"Total profit/loss: ${total_return:+.2f} ({total_return_pct:+.2f}%)")
+self.stdout.write(f"\nSolutions:")
+self.stdout.write(f" Total: {stats['total_decisions']}")
         self.stdout.write(f"  BUY: {stats['buy_decisions']}")
         self.stdout.write(f"  SELL: {stats['sell_decisions']}")
         self.stdout.write(f"  HOLD: {stats['hold_decisions']}")
-        self.stdout.write(f"\nСделки:")
-        self.stdout.write(f"  Всего: {stats['total_trades']}")
+self.stdout.write(f"\nTransactions:")
+self.stdout.write(f" Total: {stats['total_trades']}")
         self.stdout.write(f"  BUY: {stats['buy_trades']}")
         self.stdout.write(f"  SELL: {stats['sell_trades']}")
-        self.stdout.write(f"  Прибыльных: {stats['profitable_trades']}")
-        self.stdout.write(f"  Убыточных: {stats['losing_trades']}")
-        self.stdout.write(f"  Общий PnL: ${stats['total_pnl']:+.2f}")
+self.stdout.write(f" Profitable: {stats['profitable_trades']}")
+self.stdout.write(f" Unprofitable: {stats['losing_trades']}")
+self.stdout.write(f" Total PnL: ${stats['total_pnl']:+.2f}")
         
         open_positions = Position.objects.filter(user=user, is_open=True)
         if open_positions.exists():
-            self.stdout.write(f"\nОткрытые позиции: {open_positions.count()}")
+self.stdout.write(f"\nOpen positions: {open_positions.count()}")
             for pos in open_positions:
                 pnl = pos.pnl
                 pnl_str = f"${pnl:+.2f}" if pnl else "N/A"
@@ -450,7 +450,7 @@ class Command(BaseCommand):
                 )
         
         elapsed_time = time.time() - start_time
-        self.stdout.write(f"\nВремя симуляции: {elapsed_time:.1f} секунд")
-        self.stdout.write(f"Симулированный период: {(end_date - start_date).days} дней")
+self.stdout.write(f"\nSimulation time: {elapsed_time:.1f} seconds")
+self.stdout.write(f"Simulated period: {(end_date - start_date).days} days")
         self.stdout.write(self.style.SUCCESS("=" * 70))
 

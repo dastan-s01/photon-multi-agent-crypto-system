@@ -2,7 +2,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import type { Position } from '@/types/trading';
 
@@ -11,10 +10,6 @@ interface PositionTableProps {
 }
 
 export function PositionTable({ positions }: PositionTableProps) {
-  const handleClose = (positionId: string) => {
-    console.log('Close position:', positionId);
-  };
-
   if (positions.length === 0) {
     return (
       <Card className="card-glass">
@@ -46,7 +41,6 @@ export function PositionTable({ positions }: PositionTableProps) {
                 <TableHead className="font-semibold">Current Price</TableHead>
                 <TableHead className="font-semibold">P&L</TableHead>
                 <TableHead className="font-semibold">P&L %</TableHead>
-                <TableHead className="text-right font-semibold">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -79,16 +73,6 @@ export function PositionTable({ positions }: PositionTableProps) {
                     >
                       {pnlPercent >= 0 ? '+' : ''}
                       {pnlPercent.toFixed(2)}%
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleClose(position.id)}
-                        className="border-border/50 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
-                      >
-                        Close
-                      </Button>
                     </TableCell>
                   </TableRow>
                 );

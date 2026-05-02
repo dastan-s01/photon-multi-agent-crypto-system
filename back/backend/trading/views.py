@@ -133,6 +133,20 @@ def _recalculate_account_balances(account: Account, user):
     account.save(update_fields=["balance", "used_margin", "free_cash"])
 
 
+def apply_demo_ledger_from_backtest(user, final_balance: Decimal):
+    """
+    After a walk-forward backtest, align the paper account with the simulated final equity.
+    Clears demo positions and trade history so balance math stays consistent.
+    """
+    with transaction.atomic():
+        Position.objects.filter(user=user).delete()
+        Trade.objects.filter(user=user).delete()
+        account = _ensure_demo_account(user)
+        account.initial_balance = final_balance
+        account.save(update_fields=["initial_balance"])
+        _recalculate_account_balances(account, user)
+
+
 class SymbolViewSet(viewsets.ModelViewSet):
     """ViewSet for symbol management"""
     permission_classes = [IsAuthenticated]
@@ -935,64 +949,6 @@ class ClosePositionView(APIView):
             }, status=status.HTTP_200_OK)
 
 
-class PortfolioView(APIView):
-    """Endpoint for portfolio data"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        """Get portfolio summary"""
-        from django.db.models import Sum, Count, Q
-        from django.utils import timezone as tz
-
-        # Auto-prepare demo environment
-        _ensure_demo_symbol(request.user, DEFAULT_DEMO_SYMBOL)
-        account = _ensure_demo_account(request.user)
-
-        # Update current prices for open positions
-        open_positions = Position.objects.filter(user=request.user, is_open=True)
-        for position in open_positions:
-            _refresh_position_price(position)
-
-        # Calculate used margin (sum of all open positions)
-        used_margin = Decimal("0.00")
-        for position in open_positions:
-            if position.current_price:
-                used_margin += position.current_price * position.quantity
-
-        # Update account
-        account.used_margin = used_margin
-        account.free_cash = account.balance - used_margin
-        account.save(update_fields=["used_margin", "free_cash"])
-
-        # Trade statistics
-        total_trades = Trade.objects.filter(user=request.user).count()
-        
-        # Today P&L
-        today_start = tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_trades = Trade.objects.filter(
-            user=request.user,
-            executed_at__gte=today_start
-        )
-        today_pnl = today_trades.aggregate(total=Sum("pnl"))["total"] or Decimal("0.00")
-
-        # Total P&L (from all closed positions and trades)
-        total_pnl = Trade.objects.filter(user=request.user).aggregate(total=Sum("pnl"))["total"] or Decimal("0.00")
-        # Add P&L from open positions
-        for position in open_positions:
-            if position.current_price:
-                position_pnl = (position.current_price - position.entry_price) * position.quantity
-                total_pnl += position_pnl
-
-        return Response({
-            "balance": float(account.balance),
-            "freeCash": float(account.free_cash),
-            "usedMargin": float(account.used_margin),
-            "totalTrades": total_trades,
-            "todayPnL": float(today_pnl),
-            "totalPnL": float(total_pnl),
-        })
-
-
 class PositionViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for open positions"""
     permission_classes = [IsAuthenticated]
@@ -1080,6 +1036,7 @@ class EquityCurveView(APIView):
 
         _ensure_demo_symbol(request.user, DEFAULT_DEMO_SYMBOL)
         account = _ensure_demo_account(request.user)
+        _recalculate_account_balances(account, request.user)
 
         initial_balance = float(account.initial_balance)
         current_balance = float(account.balance)
@@ -1503,6 +1460,7 @@ class DashboardOverviewView(APIView):
 
         _ensure_demo_symbol(request.user, DEFAULT_DEMO_SYMBOL)
         account = _ensure_demo_account(request.user)
+        _recalculate_account_balances(account, request.user)
 
         balance = float(account.balance)
 
@@ -1530,6 +1488,7 @@ class DashboardOverviewView(APIView):
 
         return Response({
             "balance": balance,
+            "initialBalance": float(account.initial_balance),
             "todayPnL": today_pnl,
             "todayTradesCount": today_trades_count,
             "winRate": round(win_rate, 1),

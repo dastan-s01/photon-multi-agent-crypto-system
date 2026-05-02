@@ -54,7 +54,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('agent_type', models.CharField(choices=[('MARKET_MONITOR', 'Market Monitoring Agent'), ('DECISION_MAKER', 'Decision-Making Agent'), ('EXECUTION', 'Execution Agent')], db_index=True, max_length=20)),
-                ('status', models.CharField(choices=[('RUNNING', 'Работает'), ('STOPPED', 'Остановлен'), ('ERROR', 'Ошибка'), ('IDLE', 'Ожидает')], default='IDLE', max_length=20)),
+                ('status', models.CharField(choices=[('RUNNING', 'Running'), ('STOPPED', 'Stopped'), ('ERROR', 'Error'), ('IDLE', 'Idle')], default='IDLE', max_length=20)),
                 ('last_activity', models.DateTimeField(blank=True, null=True)),
                 ('error_message', models.TextField(blank=True)),
                 ('metadata', models.JSONField(blank=True, default=dict)),
@@ -103,7 +103,7 @@ class Migration(migrations.Migration):
             name='TradingDecision',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('decision', models.CharField(choices=[('BUY', 'Купить'), ('SELL', 'Продать'), ('HOLD', 'Держать')], max_length=10)),
+                ('decision', models.CharField(choices=[('BUY', 'Buy'), ('SELL', 'Sell'), ('HOLD', 'Hold')], max_length=10)),
                 ('confidence', models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True)),
                 ('reasoning', models.TextField(blank=True)),
                 ('metadata', models.JSONField(blank=True, default=dict)),
@@ -120,7 +120,7 @@ class Migration(migrations.Migration):
             name='Trade',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('action', models.CharField(choices=[('BUY', 'Купить'), ('SELL', 'Продать')], max_length=10)),
+                ('action', models.CharField(choices=[('BUY', 'Buy'), ('SELL', 'Sell')], max_length=10)),
                 ('price', models.DecimalField(decimal_places=8, max_digits=20)),
                 ('quantity', models.DecimalField(decimal_places=8, max_digits=20)),
                 ('agent_type', models.CharField(choices=[('MARKET_MONITOR', 'Market Monitoring Agent'), ('DECISION_MAKER', 'Decision-Making Agent'), ('EXECUTION', 'Execution Agent')], default='EXECUTION', max_length=20)),
@@ -138,10 +138,10 @@ class Migration(migrations.Migration):
             name='UserSettings',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('status', models.CharField(choices=[('running', 'Запущена'), ('paused', 'Приостановлена'), ('stopped', 'Остановлена')], default='stopped', max_length=10)),
+                ('status', models.CharField(choices=[('running', 'Running'), ('paused', 'Paused'), ('stopped', 'Stopped')], default='stopped', max_length=10)),
                 ('speed', models.FloatField(choices=[(0.5, '0.5x (Slower)'), (1.0, '1x (Normal)'), (2.0, '2x (Fast)'), (4.0, '4x (Very Fast)')], default=1.0)),
                 ('symbol', models.CharField(default='AAPL', max_length=20)),
-                ('timeframe', models.CharField(choices=[('5m', '5 минут'), ('15m', '15 минут'), ('1h', '1 час'), ('4h', '4 часа'), ('1d', '1 день')], default='1h', max_length=10)),
+                ('timeframe', models.CharField(choices=[('5m', '5 minutes'), ('15m', '15 minutes'), ('1h', '1 hour'), ('4h', '4 hours'), ('1d', '1 day')], default='1h', max_length=10)),
                 ('data_provider', models.CharField(default='Yahoo Finance', max_length=50)),
                 ('history_length', models.CharField(default='Last 1 year', max_length=50)),
                 ('model_type', models.CharField(default='Random Forest', max_length=50)),
@@ -149,7 +149,7 @@ class Migration(migrations.Migration):
                 ('confidence_threshold', models.DecimalField(decimal_places=2, default=0.55, max_digits=5)),
                 ('initial_balance', models.DecimalField(decimal_places=2, default=10000.0, max_digits=20)),
                 ('max_position_size', models.IntegerField(default=50)),
-                ('risk_level', models.CharField(choices=[('low', 'Низкий'), ('medium', 'Средний'), ('high', 'Высокий')], default='medium', max_length=10)),
+                ('risk_level', models.CharField(choices=[('low', 'Low'), ('medium', 'Medium'), ('high', 'High')], default='medium', max_length=10)),
                 ('stop_loss', models.DecimalField(decimal_places=2, default=-2.0, max_digits=5)),
                 ('take_profit', models.DecimalField(decimal_places=2, default=5.0, max_digits=5)),
                 ('max_leverage', models.DecimalField(decimal_places=2, default=1.0, max_digits=5)),
@@ -181,7 +181,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('timestamp', models.DateTimeField(auto_now_add=True, db_index=True)),
-                ('level', models.CharField(choices=[('info', 'Информация'), ('warning', 'Предупреждение'), ('error', 'Ошибка')], default='info', max_length=10)),
+                ('level', models.CharField(choices=[('info', 'Information'), ('warning', 'Warning'), ('error', 'Error')], default='info', max_length=10)),
                 ('message', models.TextField()),
                 ('agent_status', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='logs', to='trading.agentstatus')),
             ],

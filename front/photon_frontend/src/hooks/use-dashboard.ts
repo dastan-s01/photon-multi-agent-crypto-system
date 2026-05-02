@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api-client';
-import type { Agent, Message, Trade, ChartDataPoint } from '@/types/trading';
+import type { Message, Trade, ChartDataPoint } from '@/types/trading';
 
 interface DashboardData {
   balance: number;
+  initialBalance: number;
   todayPnL: number;
   winRate: number;
-  agentsStatus: string;
-  agents: Agent[];
+  todayTradesCount: number;
   messages: Message[];
   trades: Trade[];
   chartData: ChartDataPoint[];
@@ -33,34 +33,17 @@ export function useDashboard(symbol?: string, timeframe?: string) {
 
       const [
         overview,
-        agentsData,
         messagesData,
         tradesData,
         chartData,
         heatmapData,
       ] = await Promise.all([
         apiClient.getDashboardOverview(),
-        apiClient.getAgentsDetail(),
         apiClient.getMessages(20),
         apiClient.getTrades(20),
         apiClient.getMarketChart(symbol, timeframe),
         apiClient.getMarketHeatmap(),
       ]);
-
-      const agents: Agent[] = (agentsData || []).map((agent) => ({
-        id: String(agent.id || ''),
-        type: agent.type === 'market' ? 'market' : agent.type === 'decision' ? 'decision' : 'execution',
-        name: agent.name || 'Unknown Agent',
-        status: agent.status === 'active' ? 'active' : agent.status === 'error' ? 'error' : 'idle',
-        lastAction: agent.lastAction || 'No action',
-        lastUpdated: new Date(agent.lastUpdated || new Date()),
-        messagesProcessed: agent.messagesProcessed || 0,
-        logs: (agent.logs || []).map((log) => ({
-          timestamp: new Date(log.timestamp || new Date()),
-          level: (log.level || 'INFO').toLowerCase() as 'info' | 'warning' | 'error',
-          message: log.message || '',
-        })),
-      }));
 
       const messages: Message[] = (messagesData || []).map((msg) => ({
         id: String(msg.id || ''),
@@ -118,10 +101,10 @@ export function useDashboard(symbol?: string, timeframe?: string) {
 
       setData({
         balance: overview.balance,
+        initialBalance: overview.initialBalance ?? 10_000,
         todayPnL: overview.todayPnL,
         winRate: overview.winRate,
-        agentsStatus: overview.agentsStatus,
-        agents,
+        todayTradesCount: overview.todayTradesCount ?? 0,
         messages,
         trades,
         chartData: chart,
@@ -138,7 +121,7 @@ export function useDashboard(symbol?: string, timeframe?: string) {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [symbol, timeframe]);
 
